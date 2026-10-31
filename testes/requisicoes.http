@@ -1,0 +1,31 @@
+# Requisições para a extensão REST Client (VS Code) — clique em "Send Request"
+# Pré-requisito: "npm start" rodando.
+
+### 1) Metadados do provedor (descoberta)
+GET http://localhost:4000/.well-known/oauth-authorization-server
+
+### 2) Client Credentials — token do Serviço de Relatórios
+# @name tokenServico
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-relatorios
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&scope=relatorios:read
+
+### 3) Relatório com o token do serviço (esperado 200)
+GET http://localhost:5000/relatorios/resumo
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 4) Recurso de usuário com token do serviço (esperado 403 insufficient_scope)
+GET http://localhost:5000/transacoes
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 5) Sem token (esperado 401 invalid_token)
+GET http://localhost:5000/saldo
+
+### 6) Segredo errado (esperado 401 invalid_client)
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-errado
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&scope=relatorios:read
