@@ -2,11 +2,33 @@
 // auth-server.js — SERVIDOR DE AUTORIZAÇÃO (porta 4000)
 // Implementa: Authorization Code + PKCE, Refresh Token (com
 // rotação e detecção de reuso), Client Credentials e revogação.
+// Lab 2: registra eventos de auditoria e bloqueia IPs com
+// excesso de falhas de autenticação (força bruta).
 // =============================================================
 const http = require('node:http');
 const cfg = require('./config');
 const jwt = require('./jwt');
 const { lerCorpo, json, html, redirecionar, aleatorio, sha256b64url, iguaisSeguro, esc, pagina } = require('./util');
+const auditoria = require('./auditoria');
+
+const audit = (req, tipo, extra = {}) => auditoria.registrar({ origem: 'auth', tipo, req, ...extra });
+
+// IP em bloqueio temporário (força bruta): responde 429 sem processar o pedido
+function recusarSeBloqueado(req, res, comoHtml = false) {
+  if (!auditoria.estaBloqueado(req.ipCliente)) return false;
+  audit(req, 'REQUISICAO_BLOQUEADA', { nivel: 'AVISO', rota: new URL(req.url, cfg.EMISSOR).pathname, motivo: 'IP em bloqueio temporário por força bruta' });
+  const extras = { 'Retry-After': String(cfg.AUDITORIA.BLOQUEIO_S) };
+  if (comoHtml) html(res, 429, paginaErro('Muitas tentativas de login falharam a partir deste endereço. Aguarde alguns minutos e tente de novo.'), extras);
+  else json(res, 429, { error: 'too_many_requests', error_description: 'Muitas falhas de autenticação deste IP. Tente mais tarde.' }, extras);
+  return true;
+}
+
+// client_id que o chamador AFIRMA ser (para registrar falhas de autenticação do cliente)
+function idInformado(req, corpo) {
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Basic ')) return decodeURIComponent(Buffer.from(auth.slice(6), 'base64').toString().split(':')[0] || '').slice(0, 80);
+  return String(corpo.client_id || '').slice(0, 80);
+}
 
 const codigos = new Map(); // code -> { client_id, redirect_uri, escopos, sub, code_challenge, exp }
 const refreshTokens = new Map(); // refresh -> { sub, client_id, escopos, exp, familia }
@@ -106,22 +128,37 @@ function telaConsentimento(p, cliente, escopos, mensagem = '') {
   </form>`, '#7c3aed');
 }
 
-function getAuthorize(res, url) {
+function registrarRecusa(req, p, v) {
+  audit(req, 'AUTORIZACAO_RECUSADA', { nivel: 'AVISO', client_id: String(p.client_id || '').slice(0, 80), redirect_uri: String(p.redirect_uri || '').slice(0, 200), motivo: v.fatal ? 'redirect_uri ou client_id não registrados' : v.erro.error });
+}
+
+function getAuthorize(req, res, url) {
   const p = Object.fromEntries(url.searchParams);
   const v = validarPedido(p);
+  if (v.fatal || v.erro) registrarRecusa(req, p, v);
   if (v.fatal) return html(res, 400, paginaErro(v.fatal));
   if (v.erro) return voltarComErro(res, p, v.erro);
   html(res, 200, telaConsentimento(p, v.cliente, v.escopos));
 }
 
 async function postAuthorize(req, res) {
+  if (recusarSeBloqueado(req, res, true)) return;
   const p = await lerCorpo(req);
   const v = validarPedido(p);
+  if (v.fatal || v.erro) registrarRecusa(req, p, v);
   if (v.fatal) return html(res, 400, paginaErro(v.fatal));
   if (v.erro) return voltarComErro(res, p, v.erro);
-  if (p.decisao === 'negar') return voltarComErro(res, p, { error: 'access_denied', error_description: 'O usuário negou o acesso.' });
+  if (p.decisao === 'negar') {
+    audit(req, 'CONSENTIMENTO_NEGADO', { client_id: p.client_id });
+    return voltarComErro(res, p, { error: 'access_denied', error_description: 'O usuário negou o acesso.' });
+  }
   const usuario = cfg.USUARIOS.find((u) => u.login === p.login && iguaisSeguro(u.senha, p.senha));
-  if (!usuario) return html(res, 401, telaConsentimento(p, v.cliente, v.escopos, 'Usuário ou senha inválidos.'));
+  if (!usuario) {
+    // o login digitado vai CIFRADO: usuários às vezes digitam a senha no campo de login
+    audit(req, 'LOGIN_FALHA', { nivel: 'AVISO', client_id: p.client_id, login_cifrado: auditoria.cifrar(String(p.login || '').slice(0, 100)) });
+    return html(res, 401, telaConsentimento(p, v.cliente, v.escopos, 'Usuário ou senha inválidos.'));
+  }
+  audit(req, 'LOGIN_SUCESSO', { sub: usuario.id, client_id: p.client_id, escopos: v.escopos });
   const code = aleatorio(24);
   codigos.set(code, { client_id: p.client_id, redirect_uri: p.redirect_uri, escopos: v.escopos, sub: usuario.id, code_challenge: p.code_challenge, exp: agora() + cfg.CODE_TTL });
   log(`código emitido para ${p.client_id} (usuário ${usuario.login}, escopos: ${v.escopos.join(' ')})`);
@@ -132,15 +169,30 @@ async function postAuthorize(req, res) {
 }
 
 // ---------- /token -----------------------------------------------------
+function responderTokens(req, res, grant, sub, cliente, escopos, comRefresh, familia) {
+  const tokens = emitirTokens(sub, cliente.client_id, escopos, comRefresh, familia);
+  audit(req, 'TOKEN_EMITIDO', { grant_type: grant, client_id: cliente.client_id, sub, scope: tokens.scope, jti: jwt.decodificar(tokens.access_token).jti });
+  return json(res, 200, tokens);
+}
+
 async function postToken(req, res) {
+  if (recusarSeBloqueado(req, res)) return;
   const corpo = await lerCorpo(req);
-  const erroGrant = (d) => json(res, 400, { error: 'invalid_grant', error_description: d });
+  const grant = String(corpo.grant_type || '').slice(0, 40);
+  const recusar = (status, error, d, nivel = 'AVISO') => {
+    audit(req, 'TOKEN_RECUSADO', { nivel, grant_type: grant, client_id: idInformado(req, corpo), erro: error, motivo: d });
+    return json(res, status, { error, error_description: d });
+  };
+  const erroGrant = (d) => recusar(400, 'invalid_grant', d);
   const suportados = ['authorization_code', 'refresh_token', 'client_credentials'];
-  if (!suportados.includes(corpo.grant_type)) return json(res, 400, { error: 'unsupported_grant_type', error_description: `Use: ${suportados.join(', ')}` });
+  if (!suportados.includes(grant)) return recusar(400, 'unsupported_grant_type', `Use: ${suportados.join(', ')}`);
 
   const cliente = autenticarCliente(req, corpo);
-  if (!cliente) return json(res, 401, { error: 'invalid_client', error_description: 'Falha na autenticação do cliente (client_id/client_secret).' }, { 'WWW-Authenticate': 'Basic realm="oauth"' });
-  if (!cliente.grant_types.includes(corpo.grant_type)) return json(res, 400, { error: 'unauthorized_client', error_description: `Cliente não habilitado para ${corpo.grant_type}.` });
+  if (!cliente) {
+    audit(req, 'CLIENTE_AUTH_FALHA', { nivel: 'AVISO', client_id: idInformado(req, corpo), grant_type: grant });
+    return json(res, 401, { error: 'invalid_client', error_description: 'Falha na autenticação do cliente (client_id/client_secret).' }, { 'WWW-Authenticate': 'Basic realm="oauth"' });
+  }
+  if (!cliente.grant_types.includes(grant)) return recusar(400, 'unauthorized_client', `Cliente não habilitado para ${grant}.`);
 
   if (corpo.grant_type === 'authorization_code') {
     const d = codigos.get(corpo.code);
@@ -150,7 +202,7 @@ async function postToken(req, res) {
     if (d.redirect_uri !== corpo.redirect_uri) return erroGrant('redirect_uri diferente da usada na autorização.');
     if (!corpo.code_verifier || sha256b64url(corpo.code_verifier) !== d.code_challenge) return erroGrant('PKCE: code_verifier não confere com o code_challenge.');
     log(`tokens emitidos (authorization_code) para ${cliente.client_id}`);
-    return json(res, 200, emitirTokens(d.sub, cliente.client_id, d.escopos, true));
+    return responderTokens(req, res, grant, d.sub, cliente, d.escopos, true);
   }
 
   if (corpo.grant_type === 'refresh_token') {
@@ -158,6 +210,7 @@ async function postToken(req, res) {
     if (refreshUsados.has(rt)) {
       revogarFamilia(refreshUsados.get(rt));
       log('ALERTA: reuso de refresh token — família revogada');
+      audit(req, 'REFRESH_REUSO', { nivel: 'CRITICO', client_id: cliente.client_id, refresh_token: rt, motivo: 'refresh token já trocado foi reapresentado (possível roubo); família revogada' });
       return erroGrant('REUSO de refresh token detectado: todos os tokens desta sessão foram revogados. Faça login novamente.');
     }
     const d = refreshTokens.get(rt);
@@ -169,22 +222,27 @@ async function postToken(req, res) {
     refreshTokens.delete(rt); // ROTAÇÃO: o antigo deixa de valer...
     refreshUsados.set(rt, d.familia); // ...e passa a ser vigiado
     log(`tokens renovados (refresh_token) para ${cliente.client_id}`);
-    return json(res, 200, emitirTokens(d.sub, cliente.client_id, d.escopos, true, d.familia));
+    return responderTokens(req, res, grant, d.sub, cliente, d.escopos, true, d.familia);
   }
 
   // client_credentials: a aplicação age em nome PRÓPRIO (sem usuário, sem refresh)
   const escopos = validarEscopo(cliente, corpo.scope || cliente.escopos_permitidos.join(' '));
-  if (!escopos) return json(res, 400, { error: 'invalid_scope', error_description: 'Escopo não permitido para este cliente.' });
+  if (!escopos) return recusar(400, 'invalid_scope', 'Escopo não permitido para este cliente.');
   log(`token emitido (client_credentials) para ${cliente.client_id}`);
-  return json(res, 200, emitirTokens(cliente.client_id, cliente.client_id, escopos, false));
+  return responderTokens(req, res, grant, cliente.client_id, cliente, escopos, false);
 }
 
 // ---------- /revoke (RFC 7009) -----------------------------------------
 async function postRevoke(req, res) {
   const corpo = await lerCorpo(req);
-  if (!autenticarCliente(req, corpo)) return json(res, 401, { error: 'invalid_client' });
+  const cliente = autenticarCliente(req, corpo);
+  if (!cliente) {
+    audit(req, 'CLIENTE_AUTH_FALHA', { nivel: 'AVISO', client_id: idInformado(req, corpo), grant_type: 'revoke' });
+    return json(res, 401, { error: 'invalid_client' });
+  }
   const d = refreshTokens.get(corpo.token);
   if (d) revogarFamilia(d.familia);
+  audit(req, 'TOKEN_REVOGADO', { client_id: cliente.client_id, sub: d?.sub, encontrado: Boolean(d) });
   json(res, 200, { revogado: true }); // responde 200 mesmo se o token não existir
 }
 
@@ -204,11 +262,11 @@ function metadados() {
 }
 
 function criarServidor() {
-  return http.createServer(async (req, res) => {
+  return http.createServer(auditoria.envolver('auth', async (req, res) => {
     const url = new URL(req.url, cfg.EMISSOR);
     log(req.method, url.pathname);
     try {
-      if (req.method === 'GET' && url.pathname === '/authorize') return getAuthorize(res, url);
+      if (req.method === 'GET' && url.pathname === '/authorize') return getAuthorize(req, res, url);
       if (req.method === 'POST' && url.pathname === '/authorize') return await postAuthorize(req, res);
       if (req.method === 'POST' && url.pathname === '/token') return await postToken(req, res);
       if (req.method === 'POST' && url.pathname === '/revoke') return await postRevoke(req, res);
@@ -222,9 +280,10 @@ function criarServidor() {
       json(res, 404, { error: 'not_found' });
     } catch (e) {
       console.error('[auth] erro:', e);
-      json(res, 500, { error: 'server_error', error_description: e.message });
+      audit(req, 'ERRO_SERVIDOR', { nivel: 'ERRO', motivo: e.message });
+      json(res, 500, { error: 'server_error', error_description: 'Erro interno.' }); // detalhe só no log
     }
-  });
+  }));
 }
 
 function iniciar(porta = cfg.PORTAS.auth) {
