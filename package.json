@@ -1,13 +1,16 @@
 {
   "name": "atividade-oauth-api",
-  "version": "1.0.0",
-  "description": "Laboratório OAuth 2.0 — Authorization Code + PKCE, Refresh Token e Client Credentials (Programação Back-End)",
+  "version": "2.0.0",
+  "description": "Laboratório OAuth 2.0 + Auditoria e Logs — API Financeira (Programação Back-End, aulas 1 e 3)",
   "main": "src/iniciar.js",
   "private": true,
   "scripts": {
     "start": "node src/iniciar.js",
-    "test": "node testes/teste-fluxo.js",
-    "cc": "node src/client-credentials.js"
+    "test": "node testes/teste-fluxo.js && node testes/teste-auditoria.js",
+    "test:auditoria": "node testes/teste-auditoria.js",
+    "cc": "node src/client-credentials.js",
+    "simular": "node src/simular-trafego.js",
+    "analisar": "node src/analisar-logs.js"
   },
   "engines": {
     "node": ">=20"

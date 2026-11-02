@@ -17,6 +17,8 @@ const cliente = require('./cliente-web');
   API Financeira (recursos): http://localhost:${cfg.PORTAS.api}
   App Finanças (cliente)   : http://localhost:${cfg.PORTAS.cliente}   <-- abra no navegador
   Usuário demo: aluno / senha123   | access token: ${cfg.ACCESS_TOKEN_TTL}s
+  Logs de auditoria        : ${cfg.AUDITORIA.LOG_DIR}  (auditoria.log, alertas.log)
+  Força bruta: ${cfg.AUDITORIA.LIMITE_FALHAS} falhas/${cfg.AUDITORIA.JANELA_S}s => bloqueio de ${cfg.AUDITORIA.BLOQUEIO_S}s
   Pressione Ctrl+C para encerrar.
 ==============================================================`);
 })().catch((e) => {

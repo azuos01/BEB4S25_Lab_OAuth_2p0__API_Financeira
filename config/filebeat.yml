@@ -1,0 +1,39 @@
+# =============================================================
+# config/filebeat.yml — EXEMPLO (opcional, não executado no lab)
+# Envia logs/auditoria.log (JSON Lines) para o Elasticsearch,
+# onde o Kibana permite filtrar, correlacionar e criar alertas.
+# Pré-requisitos (fora do laboratório): Elastic Stack instalado
+# ou conta no Elastic Cloud, e Filebeat 8.x.
+# Uso: filebeat -e -c config\filebeat.yml
+# =============================================================
+filebeat.inputs:
+  - type: filestream
+    id: api-financeira-auditoria
+    paths:
+      - ${PASTA_PROJETO:.}/logs/auditoria*.log   # atual + rotacionados
+    parsers:
+      - ndjson:
+          target: ""            # campos do JSON vão para a raiz do documento
+          add_error_key: true
+    fields:
+      servico: api-financeira
+      ambiente: laboratorio
+    fields_under_root: true
+
+processors:
+  - timestamp:                 # usa o "ts" do evento como @timestamp
+      field: ts
+      layouts: ['2006-01-02T15:04:05.999Z']
+  - drop_fields:
+      fields: ["hash_anterior"]  # o hash fica; o elo anterior não é útil na busca
+
+output.elasticsearch:
+  hosts: ["${ELASTIC_HOST:http://localhost:9200}"]
+  username: "${ELASTIC_USUARIO}"
+  password: "${ELASTIC_SENHA}"   # NUNCA grave a senha aqui: use variável de ambiente
+  index: "auditoria-api-%{+yyyy.MM.dd}"
+
+setup.template.name: "auditoria-api"
+setup.template.pattern: "auditoria-api-*"
+# Retenção no Elasticsearch: crie uma política ILM (ex.: apagar após 90 dias)
+setup.ilm.enabled: false

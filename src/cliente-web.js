@@ -2,11 +2,13 @@
 // cliente-web.js — APLICAÇÃO CLIENTE "App Finanças" (porta 3000)
 // Cliente confidencial: o back-end guarda client_secret, tokens e
 // code_verifier; o navegador recebe apenas um cookie de sessão.
+// Lab 2: propaga o X-Request-Id para provedor e API (rastreio ponta a ponta).
 // =============================================================
 const http = require('node:http');
 const cfg = require('./config');
 const jwt = require('./jwt');
 const { lerCookies, html, redirecionar, aleatorio, sha256b64url, esc, pagina } = require('./util');
+const auditoria = require('./auditoria');
 
 const AUTH = cfg.EMISSOR;
 const API = `http://localhost:${cfg.PORTAS.api}`;
@@ -26,11 +28,11 @@ function obterSessao(req, res) {
   return sessoes.get(sid);
 }
 
-async function pedirToken(params) {
+async function pedirToken(params, reqId) {
   const basic = Buffer.from(`${encodeURIComponent(CLIENTE.client_id)}:${encodeURIComponent(CLIENTE.client_secret)}`).toString('base64');
   const r = await fetch(`${AUTH}/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${basic}` },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${basic}`, 'X-Request-Id': reqId },
     body: new URLSearchParams(params),
   });
   return { status: r.status, corpo: await r.json() };
@@ -92,11 +94,12 @@ async function callback(s, url, res) {
     return redirecionar(res, '/');
   }
   if (!s.state || q.get('state') !== s.state) {
+    auditoria.registrar({ origem: 'cliente', tipo: 'CALLBACK_STATE_INVALIDO', nivel: 'AVISO', req: s.req, motivo: 'state ausente ou diferente (possível CSRF)' });
     return html(res, 400, pagina('Erro', '<h1>state inválido</h1><p class="erro">Possível ataque CSRF: esta resposta não corresponde a um pedido iniciado nesta sessão.</p><a class="btn" href="/">Voltar</a>'));
   }
   const code = q.get('code');
   s.log.push(`Callback recebeu code=${code.slice(0, 8)}… e o state conferiu.`);
-  const r = await pedirToken({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI, code_verifier: s.verifier });
+  const r = await pedirToken({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI, code_verifier: s.verifier }, s.reqId);
   delete s.state;
   delete s.verifier;
   if (r.status !== 200) {
@@ -112,7 +115,7 @@ async function callback(s, url, res) {
 async function chamarApi(s, metodo, caminho, corpo) {
   const r = await fetch(`${API}${caminho}`, {
     method: metodo,
-    headers: { Authorization: `Bearer ${s.tokens.access_token}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${s.tokens.access_token}`, 'Content-Type': 'application/json', 'X-Request-Id': s.reqId },
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
   s.ultimo = { titulo: `${metodo} ${caminho}`, status: r.status, corpo: await r.json() };
@@ -120,7 +123,7 @@ async function chamarApi(s, metodo, caminho, corpo) {
 }
 
 async function renovar(s, refresh, titulo) {
-  const r = await pedirToken({ grant_type: 'refresh_token', refresh_token: refresh });
+  const r = await pedirToken({ grant_type: 'refresh_token', refresh_token: refresh }, s.reqId);
   if (r.status === 200) {
     guardarTokens(s, r.corpo);
     s.ultimo = { titulo, status: 200, corpo: { ...r.corpo, access_token: resumir(r.corpo.access_token), refresh_token: resumir(r.corpo.refresh_token) } };
@@ -133,9 +136,11 @@ async function renovar(s, refresh, titulo) {
 }
 
 function criarServidor() {
-  return http.createServer(async (req, res) => {
+  return http.createServer(auditoria.envolver('cliente', async (req, res) => {
     const url = new URL(req.url, `http://localhost:${cfg.PORTAS.cliente}`);
     const s = obterSessao(req, res);
+    s.reqId = req.idReq; // o mesmo ID segue nas chamadas ao provedor e à API
+    s.req = req;
     log(req.method, url.pathname);
     try {
       if (req.method === 'GET' && url.pathname === '/') return html(res, 200, telaInicial(s));
@@ -150,7 +155,7 @@ function criarServidor() {
       else if (req.method === 'POST' && url.pathname === '/reusar-refresh' && s.refreshAnterior) await renovar(s, s.refreshAnterior, 'Tentativa de REUSO do refresh token antigo');
       else if (req.method === 'POST' && url.pathname === '/sair') {
         const basic = Buffer.from(`${CLIENTE.client_id}:${CLIENTE.client_secret}`).toString('base64');
-        await fetch(`${AUTH}/revoke`, { method: 'POST', headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: s.tokens.refresh_token }) });
+        await fetch(`${AUTH}/revoke`, { method: 'POST', headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Request-Id': s.reqId }, body: new URLSearchParams({ token: s.tokens.refresh_token }) });
         delete s.tokens;
         delete s.refreshAnterior;
         s.ultimo = { titulo: 'Logout', status: 200, corpo: { mensagem: 'Refresh token revogado no provedor e sessão local encerrada.' } };
@@ -161,7 +166,7 @@ function criarServidor() {
       console.error('[cliente] erro:', e);
       html(res, 502, pagina('Erro', `<h1>Falha ao falar com o provedor/API</h1><pre>${esc(e.message)}</pre><p>Os três servidores estão rodando? Use <code>npm start</code>.</p>`));
     }
-  });
+  }));
 }
 
 function iniciar(porta = cfg.PORTAS.cliente) {

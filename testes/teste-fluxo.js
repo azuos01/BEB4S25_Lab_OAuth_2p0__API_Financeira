@@ -7,6 +7,8 @@ process.env.AUTH_PORT = '14000';
 process.env.API_PORT = '15000';
 process.env.CLIENT_PORT = '13000';
 process.env.OAUTH_QUIET = '1';
+// Lab 2: logs dos testes vão para uma pasta temporária (não misturam com logs/ do aluno)
+process.env.LOG_DIR = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'oauth-teste-'));
 
 const cfg = require('../src/config');
 const jwt = require('../src/jwt');

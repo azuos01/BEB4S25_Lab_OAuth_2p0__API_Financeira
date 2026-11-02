@@ -50,6 +50,32 @@ module.exports = {
     },
   ],
 
+  // ===========================================================
+  // AUDITORIA E LOGS (Laboratório 2 — aula 3)
+  // ===========================================================
+  AUDITORIA: {
+    LOG_DIR: process.env.LOG_DIR || require('node:path').join(__dirname, '..', 'logs'),
+    // Rotação: ao passar deste tamanho o arquivo é renomeado (auditoria-<data>-NNN.log)
+    LOG_MAX_BYTES: Number(process.env.LOG_MAX_BYTES || 256 * 1024), // 256 KB (didático)
+    // Retenção: mantém no máximo N arquivos rotacionados e apaga os mais antigos que X dias
+    LOG_RETENCAO_ARQUIVOS: Number(process.env.LOG_RETENCAO_ARQUIVOS || 5),
+    LOG_RETENCAO_DIAS: Number(process.env.LOG_RETENCAO_DIAS || 30),
+    // Integridade: cada linha leva um HMAC encadeado com a anterior (detecta edição/remoção)
+    CHAVE_INTEGRIDADE: process.env.LOG_CHAVE_INTEGRIDADE || 'chave-integridade-de-laboratorio',
+    // Confidencialidade: dados sensíveis (ex.: login digitado errado) vão cifrados com AES-256-GCM
+    CHAVE_CIFRA: process.env.LOG_CHAVE_CIFRA || 'chave-cifra-de-laboratorio',
+    // Detecção de força bruta: N falhas de autenticação do mesmo IP em J segundos => alerta + bloqueio
+    EVENTOS_FALHA_AUTH: ['LOGIN_FALHA', 'CLIENTE_AUTH_FALHA'],
+    LIMITE_FALHAS: Number(process.env.LIMITE_FALHAS || 5),
+    JANELA_S: Number(process.env.JANELA_S || 60),
+    BLOQUEIO_S: Number(process.env.BLOQUEIO_S || 300),
+    // X-Forwarded-For só é confiável atrás de um proxy reverso SEU. No laboratório fica ligado
+    // para simular IPs diferentes; em produção, desligue se a API estiver exposta diretamente.
+    CONFIAR_PROXY: process.env.CONFIAR_PROXY !== '0',
+    // Opcional: URL de webhook (ex.: Slack/Teams) que recebe os alertas críticos
+    ALERTA_WEBHOOK: process.env.ALERTA_WEBHOOK || '',
+  },
+
   // Usuário de demonstração (no provedor, nunca no cliente)
   USUARIOS: [{ id: 'u1', login: 'aluno', senha: 'senha123', nome: 'Aluno(a) Demo' }],
 };

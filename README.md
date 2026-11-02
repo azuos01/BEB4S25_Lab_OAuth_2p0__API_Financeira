@@ -1,20 +1,23 @@
-# Laboratório OAuth 2.0 — API Financeira
+# Laboratório OAuth 2.0 + Auditoria e Logs — API Financeira
 
-Atividade de Programação Back-End (2ª série, 4º bimestre, semana 25, aula 1). Sem dependências externas: apenas Node.js 20+.
+Programação Back-End (2ª série, 4º bimestre, semana 25): **aula 1** (OAuth) e **aula 3** (auditoria e logs). Sem dependências externas: apenas Node.js 20+.
 
-| Papel OAuth | Arquivo | Porta |
+| Papel | Arquivo | Porta |
 |---|---|---|
 | Servidor de Autorização | `src/auth-server.js` | 4000 |
 | Servidor de Recursos (API) | `src/api-financeira.js` | 5000 |
 | Cliente (App Finanças) | `src/cliente-web.js` | 3000 |
+| Auditoria (logs, alertas, integridade) | `src/auditoria.js` | — |
 
 ```powershell
-npm test      # testes automáticos de segurança
-npm start     # sobe os três servidores -> abra http://localhost:3000 (aluno / senha123)
-npm run cc    # (outro terminal) demonstração Client Credentials
-$env:ACCESS_TTL=20; npm start   # tokens de 20 s para observar a expiração
+npm test               # 25 testes OAuth + 27 testes de auditoria
+npm start              # sobe os três servidores -> http://localhost:3000 (aluno / senha123)
+npm run simular        # (outro terminal) tráfego normal + ataques
+npm run analisar       # KPIs, alertas, integridade -> relatorio\relatorio-auditoria.html
+node src\analisar-logs.js --decifrar        # logins digitados nas falhas (restrito)
+node src\analisar-logs.js --req=<req_id>    # rastreia uma requisição ponta a ponta
+$env:LOG_MAX_BYTES=8000; npm start          # força rotação rápida dos logs
 ```
 
-Plano de implementação do grupo: `docs/plano-oauth.md`.
-
-# Nome do Repositorio criado ->> Lab_BEB4S25"
+Logs em `logs/` (fora do Git): `auditoria.log` (+ rotacionados) e `alertas.log`.
+Planos do grupo: `docs/plano-oauth.md` (aula 1) e `docs/plano-auditoria.md` (aula 3).
