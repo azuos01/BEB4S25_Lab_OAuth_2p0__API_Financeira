@@ -1,0 +1,2302 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auditoria e Logs da API</title>
+<style>/* Tema escuro (página web) — tokens */
+body.web{
+  --bg:#0e1116; --card:#161b22; --ink:#e6edf3; --muted:#9aa6b2; --line:#2a313c;
+  --acc:#3fb68b; --acc-ink:#0b1f17; --acc-soft:#12352a; --acc-soft-ink:#a7ecd2;
+  --warn:#f0883e; --erro-soft:#3a1a1a; --erro-ink:#ffb4a8;
+  --code-bg:#0a0d12; --code-top:#1c232d; --code-ink:#dbe3ec; --chip:#222a35; --chip-ink:#d0d9e3;
+  --campo:#0f141a; --campo-borda:#3a4452; --quote:#1b2129; --quote-borda:#3a4452; --th:#1d242e;
+  --trilho:#2a313c; --barra-bg:rgba(14,17,22,.92); --amb:#2f3a48; --feito:#132a22; --feito-borda:#2f6f57;
+  color-scheme:dark;
+}
+/* Tema claro (PDF para impressão) */
+body.pdf{
+  --bg:#ffffff; --card:#ffffff; --ink:#1d2433; --muted:#5b6475; --line:#e3ded3;
+  --acc:#0f6e5c; --acc-ink:#ffffff; --acc-soft:#e3f1ec; --acc-soft-ink:#0b4f42;
+  --warn:#a4451b; --erro-soft:#fbeae5; --erro-ink:#7a2a12;
+  --code-bg:#f6f6f4; --code-top:#e8e5dd; --code-ink:#1d2433; --chip:#efe9dc; --chip-ink:#1d2433;
+  --campo:#fff; --campo-borda:#888; --quote:#faf7f0; --quote-borda:#c9bfa8; --th:#f3efe6;
+  --trilho:#e6e1d6; --barra-bg:#fff; --amb:#1d2433; --feito:#fff; --feito-borda:#e3ded3;
+}
+:root{--mono:"Cascadia Code",Consolas,"SFMono-Regular",Menlo,monospace;--sans:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans)}
+main{max-width:920px;margin:0 auto;padding:0 16px 64px}
+a{color:var(--acc)}
+code{font-family:var(--mono);font-size:.88em;background:var(--chip);color:var(--chip-ink);padding:.05em .35em;border-radius:4px;word-break:break-word}
+h1{font-size:clamp(1.6rem,4.5vw,2.3rem);line-height:1.15;margin:.2rem 0 .8rem;letter-spacing:-.01em}
+h2{font-size:1.25rem;margin:0 0 .8rem}
+h3{font-size:1.02rem;margin:1.3rem 0 .5rem}
+h4{font-size:.98rem;margin:0 0 .4rem}
+.titulo-sec{margin:2rem 0 1rem;font-size:1.35rem}
+
+.barra-fixa{position:sticky;top:0;z-index:10;background:var(--barra-bg);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 16px}
+.barra-info{max-width:920px;margin:0 auto 6px;display:flex;justify-content:space-between;gap:12px;font-size:.9rem;flex-wrap:wrap}
+.trilho{position:relative;max-width:920px;margin:0 auto;height:12px;background:var(--trilho);border-radius:99px;overflow:hidden}
+.preenchido{height:100%;width:0;background:linear-gradient(90deg,#1f8a68,#3fb68b);transition:width .35s ease}
+.marco{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--warn);opacity:.8}
+
+.capa{padding:28px 0 8px}
+.sobre{text-transform:uppercase;letter-spacing:.08em;font-size:.78rem;color:var(--acc);font-weight:700;margin:0}
+.chips{list-style:none;padding:0;margin:0 0 1rem;display:flex;flex-wrap:wrap;gap:6px}
+.chips li{background:var(--chip);color:var(--chip-ink);padding:.2rem .65rem;border-radius:99px;font-size:.82rem}
+.intro{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:14px 18px}
+.intro p{margin:.4rem 0}
+.selo{display:inline-block;margin-top:.3rem;font-size:.85rem;background:var(--acc-soft);color:var(--acc-soft-ink);padding:.15rem .55rem;border-radius:6px}
+
+.cartao{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+.grupo label{display:block;font-weight:600;margin:.6rem 0 .25rem;font-size:.92rem}
+input[type=text],textarea{width:100%;padding:.6rem .7rem;font:inherit;color:var(--ink);border:1px solid var(--campo-borda);border-radius:8px;background:var(--campo)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+input[type=text]:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:1px}
+.ctx{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;margin:0}
+.ctx dt{font-weight:700;color:var(--muted);font-size:.9rem}
+.ctx dd{margin:0}
+@media (max-width:620px){.ctx{grid-template-columns:1fr}.ctx dd{margin-bottom:.4rem}}
+blockquote{margin:.6rem 0;padding:.7rem 1rem;background:var(--quote);border-left:4px solid var(--quote-borda);border-radius:6px}
+blockquote cite{display:block;font-size:.8rem;color:var(--muted);margin-top:.3rem;font-style:normal}
+.tab{width:100%;border-collapse:collapse;font-size:.9rem;display:block;overflow-x:auto}
+.tab th,.tab td{border-bottom:1px solid var(--line);padding:.45rem .5rem;text-align:left;vertical-align:top}
+.tab th{background:var(--th)}
+.tab td.num{text-align:right;white-space:nowrap}
+.tab tr.total td{font-weight:700;border-top:2px solid var(--ink)}
+.fluxo{padding-left:1.2rem;font-size:.93rem}
+
+.lista-check{list-style:none;padding:0;margin:0}
+.lista-check li{border-bottom:1px dashed var(--line)}
+.lista-check label{display:flex;gap:12px;align-items:flex-start;padding:.55rem 0;cursor:pointer}
+.lista-check small{display:block;color:var(--muted);font-size:.84rem}
+input.item{width:20px;height:20px;margin:.15rem 0 0;accent-color:var(--acc);flex:none;cursor:pointer}
+.caixa{flex:none;display:inline-grid;place-items:center;width:20px;height:20px;border:2px solid var(--acc);border-radius:4px;font-size:14px;font-weight:700;color:var(--acc-ink);background:var(--acc);margin-top:.15rem}
+
+.passo-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.passo-topo label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;flex:1 1 320px}
+.num{flex:none;font-weight:700;color:var(--acc);font-size:.85rem;padding-top:.1rem;white-space:nowrap}
+.tit{font-weight:700;font-size:1.05rem}
+.amb{background:var(--amb);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:99px;white-space:nowrap}
+.passo.feito{border-color:var(--feito-borda);background:var(--feito)}
+.ok{font-size:.9rem;background:var(--acc-soft);color:var(--acc-soft-ink);padding:.45rem .7rem;border-radius:8px;margin:.8rem 0 0}
+.ok code{background:transparent;color:inherit}
+
+.exemplos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.8rem}
+@media (max-width:700px){.exemplos{grid-template-columns:1fr}}
+.ex{border-radius:10px;padding:.55rem .75rem;font-size:.86rem;min-width:0}
+.ex h5{margin:0 0 .35rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.ex pre{margin:0;font:.76rem/1.45 var(--mono);white-space:pre-wrap;word-break:break-word}
+.ex p{margin:.45rem 0 0}
+.ex.sucesso{background:var(--acc-soft);color:var(--acc-soft-ink)}
+.ex.falha{background:var(--erro-soft);color:var(--erro-ink)}
+
+.codigo{margin:.7rem 0;border-radius:10px;overflow:hidden;background:var(--code-bg);border:1px solid var(--line)}
+.codigo-topo{display:flex;justify-content:space-between;align-items:center;padding:.35rem .7rem;background:var(--code-top);color:var(--muted);font:600 .78rem var(--mono);gap:8px}
+.codigo pre{margin:0;padding:.8rem 1rem;overflow-x:auto;max-height:520px}
+.codigo code{background:none;color:var(--code-ink);font-size:.8rem;line-height:1.5;padding:0;white-space:pre;word-break:normal}
+.copiar{font:600 .75rem var(--sans);background:#2f3a48;color:#fff;border:0;border-radius:6px;padding:.25rem .65rem;cursor:pointer}
+.copiar:hover{background:#1f8a68}
+details.arq{margin:.6rem 0;border:1px solid var(--line);border-radius:10px;padding:.2rem .7rem}
+details.arq summary{cursor:pointer;padding:.4rem 0}
+details.arq small{color:var(--muted)}
+
+.bloqueio{text-align:center;border-style:dashed;color:var(--muted)}
+.respostas .resp{border-top:1px solid var(--line);padding:.9rem 0}
+.respostas .resp:first-of-type{border-top:0}
+.respostas h3{color:var(--acc);margin-top:1.4rem}
+.respostas.revelar{animation:surgir .5s ease}
+@keyframes surgir{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fontes{padding-left:1.1rem}
+.fontes li{margin:.3rem 0}
+.fontes small{display:block;color:var(--muted);word-break:break-all}
+.acoes{display:flex;gap:12px;align-items:center;margin-top:.7rem;flex-wrap:wrap}
+.acoes button{background:var(--acc);color:var(--acc-ink);border:0;border-radius:8px;padding:.6rem 1rem;font:700 .9rem var(--sans);cursor:pointer}
+#msgResumo{font-size:.88rem;color:var(--acc)}
+
+/* ---------- versão PDF (estática, clara) ---------- */
+body.pdf{font-size:11pt}
+body.pdf .barra-fixa{position:static}
+body.pdf .passo-topo,body.pdf .resp h4,body.pdf h2,body.pdf h3,body.pdf .ex h5{break-after:avoid}
+body.pdf .ex{break-inside:avoid}
+body.pdf .codigo pre{max-height:none;overflow:visible}
+body.pdf .codigo code{white-space:pre-wrap;word-break:break-word;font-size:7.4pt;line-height:1.38}
+body.pdf .tab{display:table}
+body.pdf .fontes a{color:var(--ink);text-decoration:none}
+.linha-preencher{border-bottom:1px solid #888;height:2.1rem;display:flex;align-items:flex-end;padding-bottom:2px;margin-bottom:.3rem}
+.linha-preencher span{font-weight:600}
+.linha-preencher.curta{width:50%}
+.caixa-feedback{border:1px solid #888;border-radius:8px;height:9rem}
+.arq-nome{margin:.8rem 0 .2rem}
+@page{size:A4;margin:14mm 13mm 16mm}
+</style></head><body class="web">
+<div class="barra-fixa" role="region" aria-label="Progresso">
+  <div class="barra-info"><b>Progresso</b><span id="txtProg">0 de 30 itens · 0%</span></div>
+  <div class="trilho" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="trilho"><div class="preenchido" id="barra"></div><div class="marco" title="50%: libera as respostas"></div></div>
+</div>
+<main>
+<header class="capa">
+  <p class="sobre">Roteiro de laboratório · Programação Back-End</p>
+  <h1>Rastreando ameaças: auditoria e logs para APIs seguras</h1>
+  <ul class="chips"><li>2ª série</li><li>4º bimestre</li><li>Semana 25</li><li>Aula 3</li><li>Servidores Web, API e Segurança das Aplicações</li></ul>
+  <section class="intro">
+   <p>Atividade elaborada pelo Prof. Marcos Souza, baseado nos materiais didáticos fornecidos pela Sec. Educ. do Estado de São Paulo para o programa de Educação Profissional Paulista, curso Técnico em Desenvolvimento de Sistemas, na disciplina de Programação Back-End – 2ª série, 4º bimestre, Semana 25, Aula 3, tema “Rastreando ameaças: auditoria e logs para APIs seguras” (unidade Servidores Web, API e Segurança das Aplicações) — Laboratório, seção 2.</p>
+   <p>A ferramenta de inteligência artificial Claude, desenvolvida pela Anthropic, foi utilizada para otimizar esta atividade. <span class="selo">Modelo: Claude Opus 5.5 (claude-opus-5-5) · gerado em 02/11/2026, às 19:12 (horário de Brasília)</span></p>
+  </section>
+</header>
+<section class="cartao grupo"><h2>Integrantes do grupo</h2>
+  <label for="nomes">Nomes dos alunos (2 a 4, separados por vírgula)</label>
+  <input id="nomes" type="text" placeholder="Ex.: Ana Lima, Bruno Costa, Carla Dias" autocomplete="off">
+  <label for="turma">Turma</label><input id="turma" type="text" placeholder="Ex.: 2ª A — DS" autocomplete="off">
+</section>
+<section class="cartao"><h2>Contexto do laboratório</h2><dl class="ctx">
+<dt>Continuidade</dt><dd>Segunda seção do laboratório: a API financeira com OAuth construída na aula 1 recebe auditoria e logs. Quem não fez a aula 1 usa o script desta aula, que recria a base completa.</dd>
+<dt>Sistema operacional</dt><dd>Windows 10/11 — PowerShell 5.1+ como shell padrão</dd>
+<dt>Ferramentas</dt><dd>Node.js 20 LTS+ (npm 10+), Git 2.40+, Visual Studio Code 1.85+, navegador com DevTools</dd>
+<dt>Dependências npm</dt><dd>Nenhuma — só módulos nativos do Node (fs, crypto, http). ELK/Splunk aparecem como configuração de referência opcional.</dd>
+<dt>Grupos</dt><dd>2 a 4 estudantes por grupo</dd>
+<dt>Duração</dt><dd>2 aulas de 50 min (100 min): 10 estudo · 15 instrumentação · 45 execução (logs ao vivo, ataques, análise, integridade, rotação) · 20 plano e perguntas · 10 entrega</dd>
+<dt>Objetivo</dt><dd>Registrar eventos críticos da API em formato estruturado e protegido, gerar alertas e bloqueio automático contra força bruta, analisar os logs com indicadores e redigir o plano de auditoria do grupo.</dd>
+</dl><h3>Cenário</h3><blockquote class="slack">“Equipe, identificamos algumas anomalias nos logs da nossa API e precisamos revisar nosso processo de auditoria. Como vocês recomendariam ajustar nossa configuração e análise de logs para detectar e responder a incidentes de segurança?” <cite>Situação fictícia produzida pela SEDUC-SP</cite></blockquote>
+<h3>Arquitetura do laboratório</h3><table class="tab"><thead><tr><th>Componente</th><th>Arquivo</th><th>Porta</th><th>Responsabilidade</th></tr></thead><tbody>
+<tr><td>Módulo de auditoria</td><td><code>src/auditoria.js</code></td><td>—</td><td>JSON Lines, mascaramento, cifra AES-GCM, HMAC encadeado, rotação/retenção, alertas e bloqueio</td></tr>
+<tr><td>Servidor de Autorização</td><td><code>src/auth-server.js</code></td><td>4000</td><td>Registra logins, tokens, reuso de refresh; responde 429 a IP bloqueado</td></tr>
+<tr><td>API Financeira</td><td><code>src/api-financeira.js</code></td><td>5000</td><td>Registra acessos permitidos/negados, operações sensíveis e tokens adulterados</td></tr>
+<tr><td>App Finanças</td><td><code>src/cliente-web.js</code></td><td>3000</td><td>Propaga o X-Request-Id para provedor e API (rastreio ponta a ponta)</td></tr>
+<tr><td>Simulador</td><td><code>src/simular-trafego.js</code></td><td>—</td><td>Tráfego normal + 5 tipos de ataque com IPs simulados</td></tr>
+<tr><td>Analisador</td><td><code>src/analisar-logs.js</code></td><td>—</td><td>Integridade, KPIs, correlação por IP/req_id e relatório HTML</td></tr>
+</tbody></table>
+<h3>Ciclo de auditoria implementado</h3><ol class="fluxo">
+<li><b>Gerar:</b> cada serviço grava eventos estruturados (quem, o quê, quando, de onde, resultado) com <code>req_id</code> e <code>jti</code> para correlação.</li>
+<li><b>Proteger:</b> segredos mascarados, dado sensível cifrado (AES-256-GCM) e cada linha assinada com HMAC encadeado.</li>
+<li><b>Armazenar:</b> rotação por tamanho e retenção por quantidade/idade; <code>logs/</code> fora do Git.</li>
+<li><b>Detectar:</b> regras em tempo real — força bruta (alerta + bloqueio 429), token adulterado e reuso de refresh token.</li>
+<li><b>Analisar e responder:</b> verificação de integridade, indicadores, IPs suspeitos, rastreio por <code>req_id</code> e recomendações.</li></ol></section>
+<section class="cartao"><h2>Checklist de recursos</h2><ul class="lista-check">
+<li><label><input type="checkbox" class="item" id="i0" data-rotulo="Recurso: Computador com Windows 10/11 e PowerShell 5.1+"><span><b>Computador com Windows 10/11 e PowerShell 5.1+</b><small>Confira com <code>$PSVersionTable.PSVersion</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i1" data-rotulo="Recurso: Node.js 20 LTS ou superior (inclui npm 10+)"><span><b>Node.js 20 LTS ou superior (inclui npm 10+)</b><small><a href='https://nodejs.org/pt/download'>nodejs.org</a> ou <code>winget install OpenJS.NodeJS.LTS</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i2" data-rotulo="Recurso: Git 2.40 ou superior"><span><b>Git 2.40 ou superior</b><small><a href='https://git-scm.com/downloads'>git-scm.com</a> ou <code>winget install Git.Git</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i3" data-rotulo="Recurso: Visual Studio Code 1.85 ou superior"><span><b>Visual Studio Code 1.85 ou superior</b><small><a href='https://code.visualstudio.com/'>code.visualstudio.com</a> ou <code>winget install Microsoft.VisualStudioCode</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i4" data-rotulo="Recurso: Projeto da aula 1 (&lt;code&gt;Documentos\atividade-oauth-api&lt;/code&gt;)"><span><b>Projeto da aula 1 (<code>Documentos\atividade-oauth-api</code>)</b><small>Se não tiver, o script desta aula recria a base completa</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i5" data-rotulo="Recurso: Extensão Log File Highlighter (emilast.LogFileHighlighter) — opcional"><span><b>Extensão Log File Highlighter (emilast.LogFileHighlighter) — opcional</b><small>Colore níveis e datas ao abrir <code>logs\auditoria.log</code> no VS Code</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i6" data-rotulo="Recurso: Navegador atualizado com DevTools (F12)"><span><b>Navegador atualizado com DevTools (F12)</b><small>Para provocar o bloqueio por força bruta e ver o cabeçalho <code>X-Request-Id</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i7" data-rotulo="Recurso: Portas 3000, 4000 e 5000 livres"><span><b>Portas 3000, 4000 e 5000 livres</b><small>Encerre servidores antigos antes do <code>npm start</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i8" data-rotulo="Recurso: Arquivo de partida: &lt;code&gt;atividade-auditoria-logs-api_script.ps1&lt;/code&gt;"><span><b>Arquivo de partida: <code>atividade-auditoria-logs-api_script.ps1</code></b><small>Preparação e execução automática desta seção</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i9" data-rotulo="Recurso: Material de referência SEDUC-SP (roteiro SISANO2C2B4S25A3AP)"><span><b>Material de referência SEDUC-SP (roteiro SISANO2C2B4S25A3AP)</b><small>Ferramentas de auditoria, configuração de logs e análise de dados</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i10" data-rotulo="Recurso: Modelo do plano: &lt;code&gt;docs/plano-auditoria.md&lt;/code&gt;"><span><b>Modelo do plano: <code>docs/plano-auditoria.md</code></b><small>Documento que o grupo completa na etapa de Execução</small></span></label></li>
+</ul></section>
+<section><h2 class="titulo-sec">Procedimento passo a passo</h2>
+<article class="cartao passo" id="passo1"><div class="passo-topo"><label><input type="checkbox" class="item" id="i11" data-rotulo="Passo 1"><span class="num">Passo 1</span><span class="tit">Conferir ferramentas e o projeto da aula 1</span></label><span class="amb">PowerShell</span></div>
+<p>Confira as versões e abra a pasta do projeto da aula 1. O <code>git log</code> deve mostrar os commits da aula 1.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code>node -v; npm.cmd -v; git --version
+cd &quot;$HOME\Documents\atividade-oauth-api&quot;
+git status
+git log --oneline</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Versões mínimas atendidas e histórico da aula 1 visível (ou decisão de usar o script).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>v22.11.0
+10.9.0
+git version 2.47.1.windows.1
+3f9c2ab feat: laboratorio OAuth ...</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>cd : Não é possível localizar o caminho &#x27;...\atividade-oauth-api&#x27; porque ele não existe.</pre><p><b>Como corrigir:</b> Você não tem a base da aula 1: rode o script desta aula (passo 2), que recria o projeto completo.</p></div></div></article>
+<article class="cartao passo" id="passo2"><div class="passo-topo"><label><input type="checkbox" class="item" id="i12" data-rotulo="Passo 2"><span class="num">Passo 2</span><span class="tit">(Opcional) Preparação automática com o script</span></label><span class="amb">PowerShell</span></div>
+<p>O script cria a branch <code>lab2-auditoria</code> (salvando antes o trabalho pendente), grava os arquivos desta seção <b>preservando os planos já escritos</b>, roda os 52 testes, sobe os servidores, confere o log de acesso, executa a simulação de ataques, valida alertas, integridade e ausência de segredos nos logs, e gera o relatório. Ao final mostra a tabela passo/ambiente/comando/status, lista o que é <b>manual</b> e salva <code>relatorio-preparacao.csv</code>. Não faz login, push nem configura serviços externos. Quem usar o script confere os passos 3 a 10 e segue no passo 11.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code>cd $HOME\Downloads
+powershell -ExecutionPolicy Bypass -File .\atividade-auditoria-logs-api_script.ps1
+# opções: -Destino &quot;C:\outra\pasta&quot;   -SemServidor</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Relatório final sem itens FALHOU.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[OK    ] 11 Testes automáticos - OAuth 25 OK; Auditoria 27 OK
+...
+Sucesso: 20   Falhas: 0   ...   Manuais: 8</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>[FALHOU] 06 Branch lab2-auditoria - error: Your local changes would be overwritten by checkout</pre><p><b>Como corrigir:</b> Rode de novo: o script commita o trabalho pendente antes de trocar de branch. Persistindo, rode git status e resolva conflitos.</p></div></div></article>
+<article class="cartao passo" id="passo3"><div class="passo-topo"><label><input type="checkbox" class="item" id="i13" data-rotulo="Passo 3"><span class="num">Passo 3</span><span class="tit">Criar a branch da aula 3 e conferir a base</span></label><span class="amb">Git</span></div>
+<p>Guarde o estado da aula 1 e trabalhe numa branch nova. Os arquivos abaixo <b>não mudam</b> em relação à aula 1 (estão aqui para quem precisar recriar a base).</p>
+<div class="codigo"><div class="codigo-topo"><span>Git — comandos</span><button class="copiar" type="button" aria-label="Copiar Git — comandos">Copiar</button></div><pre><code>git add -A
+git commit -m &quot;chore: estado final da aula 1&quot;   # se houver algo pendente
+git switch -c lab2-auditoria
+git branch</code></pre></div>
+<details class="arq"><summary><code>src/util.js</code> <small>80 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/util.js</span><button class="copiar" type="button" aria-label="Copiar src/util.js">Copiar</button></div><pre><code>// =============================================================
+// util.js — Funções auxiliares HTTP (somente módulos nativos)
+// =============================================================
+const crypto = require(&#x27;node:crypto&#x27;);
+
+function lerCorpo(req) {
+  return new Promise((resolve, reject) =&gt; {
+    let dados = &#x27;&#x27;;
+    req.on(&#x27;data&#x27;, (parte) =&gt; {
+      dados += parte;
+      if (dados.length &gt; 1e6) req.destroy(); // limite de 1 MB
+    });
+    req.on(&#x27;end&#x27;, () =&gt; {
+      try {
+        const tipo = req.headers[&#x27;content-type&#x27;] || &#x27;&#x27;;
+        if (tipo.includes(&#x27;application/json&#x27;)) return resolve(dados ? JSON.parse(dados) : {});
+        resolve(Object.fromEntries(new URLSearchParams(dados)));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on(&#x27;error&#x27;, reject);
+  });
+}
+
+function json(res, status, obj, extras = {}) {
+  res.writeHead(status, { &#x27;Content-Type&#x27;: &#x27;application/json; charset=utf-8&#x27;, &#x27;Cache-Control&#x27;: &#x27;no-store&#x27;, ...extras });
+  res.end(JSON.stringify(obj, null, 2));
+}
+
+function html(res, status, corpo, extras = {}) {
+  res.writeHead(status, { &#x27;Content-Type&#x27;: &#x27;text/html; charset=utf-8&#x27;, &#x27;Cache-Control&#x27;: &#x27;no-store&#x27;, ...extras });
+  res.end(corpo);
+}
+
+function redirecionar(res, url) {
+  res.writeHead(302, { Location: url });
+  res.end();
+}
+
+function lerCookies(req) {
+  return Object.fromEntries(
+    (req.headers.cookie || &#x27;&#x27;).split(&#x27;;&#x27;).filter((c) =&gt; c.includes(&#x27;=&#x27;)).map((c) =&gt; {
+      const i = c.indexOf(&#x27;=&#x27;);
+      return [c.slice(0, i).trim(), decodeURIComponent(c.slice(i + 1).trim())];
+    })
+  );
+}
+
+const aleatorio = (bytes = 32) =&gt; crypto.randomBytes(bytes).toString(&#x27;base64url&#x27;);
+const sha256b64url = (texto) =&gt; crypto.createHash(&#x27;sha256&#x27;).update(texto).digest(&#x27;base64url&#x27;);
+
+function iguaisSeguro(a, b) {
+  const x = Buffer.from(String(a ?? &#x27;&#x27;));
+  const y = Buffer.from(String(b ?? &#x27;&#x27;));
+  return x.length === y.length &amp;&amp; crypto.timingSafeEqual(x, y);
+}
+
+const esc = (s) =&gt;
+  String(s ?? &#x27;&#x27;).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g, (c) =&gt; ({ &#x27;&amp;&#x27;: &#x27;&amp;amp;&#x27;, &#x27;&lt;&#x27;: &#x27;&amp;lt;&#x27;, &#x27;&gt;&#x27;: &#x27;&amp;gt;&#x27;, &#x27;&quot;&#x27;: &#x27;&amp;quot;&#x27;, &quot;&#x27;&quot;: &#x27;&amp;#39;&#x27; }[c]));
+
+function pagina(titulo, corpo, cor = &#x27;#2563eb&#x27;) {
+  return `&lt;!doctype html&gt;&lt;html lang=&quot;pt-BR&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;title&gt;${esc(titulo)}&lt;/title&gt;
+&lt;style&gt;
+ body{font-family:system-ui,Segoe UI,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#1f2937;background:#f8fafc}
+ .tag{display:inline-block;background:${cor};color:#fff;padding:.2rem .6rem;border-radius:99px;font-size:.8rem}
+ h1{margin:.4rem 0 1rem} h2{font-size:1.05rem;margin-top:1.6rem}
+ pre{background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:8px;overflow:auto;font-size:.85rem}
+ .btn,button{display:inline-block;background:${cor};color:#fff;border:0;padding:.55rem .9rem;border-radius:6px;
+   text-decoration:none;font-size:.9rem;cursor:pointer;margin:.2rem .2rem .2rem 0}
+ .sec{background:#475569} .perigo{background:#b91c1c}
+ form{display:inline} label{display:block;margin:.5rem 0} input{padding:.45rem;border:1px solid #cbd5e1;border-radius:6px}
+ form.bloco{display:block;background:#fff;padding:1rem;border-radius:8px;border:1px solid #e2e8f0}
+ .erro{color:#b91c1c;font-weight:600} .dica{font-size:.85rem;color:#475569} ol li{margin:.25rem 0;font-size:.9rem}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;${corpo}&lt;/body&gt;&lt;/html&gt;`;
+}
+
+module.exports = { lerCorpo, json, html, redirecionar, lerCookies, aleatorio, sha256b64url, iguaisSeguro, esc, pagina };</code></pre></div></details>
+<details class="arq"><summary><code>src/jwt.js</code> <small>42 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/jwt.js</span><button class="copiar" type="button" aria-label="Copiar src/jwt.js">Copiar</button></div><pre><code>// =============================================================
+// jwt.js — Assinatura e validação de JWT (HS256) sem bibliotecas
+// Em produção prefira bibliotecas consolidadas (ex.: &quot;jose&quot;) e
+// assinatura assimétrica (RS256/ES256) publicada via JWKS.
+// =============================================================
+const crypto = require(&#x27;node:crypto&#x27;);
+
+const b64 = (obj) =&gt; Buffer.from(JSON.stringify(obj)).toString(&#x27;base64url&#x27;);
+const hmac = (dados, segredo) =&gt; crypto.createHmac(&#x27;sha256&#x27;, segredo).update(dados).digest(&#x27;base64url&#x27;);
+
+function assinar(payload, segredo) {
+  const cabecalho = b64({ alg: &#x27;HS256&#x27;, typ: &#x27;JWT&#x27; });
+  const corpo = b64(payload);
+  return `${cabecalho}.${corpo}.${hmac(`${cabecalho}.${corpo}`, segredo)}`;
+}
+
+function verificar(token, segredo) {
+  const partes = String(token || &#x27;&#x27;).split(&#x27;.&#x27;);
+  if (partes.length !== 3) throw new Error(&#x27;token malformado&#x27;);
+  const [cabecalho, corpo, assinatura] = partes;
+  const esperado = Buffer.from(hmac(`${cabecalho}.${corpo}`, segredo));
+  const recebido = Buffer.from(assinatura);
+  // comparação em tempo constante (evita ataque de temporização)
+  if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) {
+    throw new Error(&#x27;assinatura invalida (token adulterado ou de outro emissor)&#x27;);
+  }
+  const payload = JSON.parse(Buffer.from(corpo, &#x27;base64url&#x27;).toString());
+  if (!payload.exp || Math.floor(Date.now() / 1000) &gt;= payload.exp) throw new Error(&#x27;token expirado&#x27;);
+  return payload;
+}
+
+// Apenas lê as claims (NÃO valida) — usado pelo cliente para exibir na tela
+function decodificar(token) {
+  try {
+    return JSON.parse(Buffer.from(String(token).split(&#x27;.&#x27;)[1], &#x27;base64url&#x27;).toString());
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { assinar, verificar, decodificar };</code></pre></div></details>
+<details class="arq"><summary><code>src/client-credentials.js</code> <small>39 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/client-credentials.js</span><button class="copiar" type="button" aria-label="Copiar src/client-credentials.js">Copiar</button></div><pre><code>// =============================================================
+// client-credentials.js — Comunicação SERVIDOR-SERVIDOR
+// O &quot;Serviço de Relatórios&quot; não tem usuário: autentica-se com o
+// próprio client_id/client_secret e recebe um token só dele.
+// Uso (com &quot;npm start&quot; rodando em outro terminal): npm run cc
+// =============================================================
+const cfg = require(&#x27;./config&#x27;);
+
+const svc = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;servico-relatorios&#x27;);
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const basic = Buffer.from(`${svc.client_id}:${svc.client_secret}`).toString(&#x27;base64&#x27;);
+
+async function chamar(caminho, token) {
+  const r = await fetch(`${API}${caminho}`, { headers: { Authorization: `Bearer ${token}` } });
+  console.log(`   GET ${caminho} -&gt; HTTP ${r.status}`);
+  console.log(JSON.stringify(await r.json(), null, 2).replace(/^/gm, &#x27;   &#x27;));
+}
+
+(async () =&gt; {
+  console.log(&#x27;1) Serviço de Relatórios pede token direto ao provedor (grant_type=client_credentials)&#x27;);
+  const r = await fetch(`${cfg.EMISSOR}/token`, {
+    method: &#x27;POST&#x27;,
+    headers: { Authorization: `Basic ${basic}`, &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27; },
+    body: new URLSearchParams({ grant_type: &#x27;client_credentials&#x27;, scope: &#x27;relatorios:read&#x27; }),
+  });
+  const t = await r.json();
+  console.log(`   HTTP ${r.status} | scope=${t.scope} | expires_in=${t.expires_in}s | refresh_token=${t.refresh_token ?? &#x27;(nenhum — não há usuário)&#x27;}`);
+  if (!r.ok) process.exit(1);
+
+  console.log(&#x27;2) Usa o token no recurso permitido pelo escopo:&#x27;);
+  await chamar(&#x27;/relatorios/resumo&#x27;, t.access_token);
+
+  console.log(&#x27;3) Tenta um recurso de usuário (fora do escopo) — esperado 403:&#x27;);
+  await chamar(&#x27;/transacoes&#x27;, t.access_token);
+})().catch((e) =&gt; {
+  console.error(`Erro: ${e.message}. O laboratório está rodando? Execute &quot;npm start&quot; em outro terminal.`);
+  process.exit(1);
+});</code></pre></div></details>
+<details class="arq"><summary><code>testes/requisicoes.http</code> <small>32 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>testes/requisicoes.http</span><button class="copiar" type="button" aria-label="Copiar testes/requisicoes.http">Copiar</button></div><pre><code># Requisições para a extensão REST Client (VS Code) — clique em &quot;Send Request&quot;
+# Pré-requisito: &quot;npm start&quot; rodando.
+
+### 1) Metadados do provedor (descoberta)
+GET http://localhost:4000/.well-known/oauth-authorization-server
+
+### 2) Client Credentials — token do Serviço de Relatórios
+# @name tokenServico
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-relatorios
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&amp;scope=relatorios:read
+
+### 3) Relatório com o token do serviço (esperado 200)
+GET http://localhost:5000/relatorios/resumo
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 4) Recurso de usuário com token do serviço (esperado 403 insufficient_scope)
+GET http://localhost:5000/transacoes
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 5) Sem token (esperado 401 invalid_token)
+GET http://localhost:5000/saldo
+
+### 6) Segredo errado (esperado 401 invalid_client)
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-errado
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&amp;scope=relatorios:read</code></pre></div></details>
+<details class="arq"><summary><code>docs/plano-oauth.md</code> <small>57 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>docs/plano-oauth.md</span><button class="copiar" type="button" aria-label="Copiar docs/plano-oauth.md">Copiar</button></div><pre><code># Plano de implementação de OAuth 2.0 — API Financeira
+
+**Grupo:** _(nomes dos integrantes)_  **Turma:** _____  **Data:** ___/___/______
+
+## 1. Contexto
+A API financeira expõe saldo, extrato e transferências. Ela é consumida por (a) um aplicativo web usado por pessoas e (b) um serviço interno de relatórios que roda sem usuário. Objetivo: permitir esse acesso **sem que nenhuma aplicação conheça a senha do usuário**, com permissões mínimas e tokens de vida curta.
+
+## 2. Escolha do fluxo (justificativa)
+| Cliente | Fluxo escolhido | Por quê |
+|---|---|---|
+| App Finanças (web, com back-end) | **Authorization Code + PKCE** | O usuário se autentica só no provedor; o código trafega pelo navegador mas só vale junto com o `code_verifier` (PKCE) e o `client_secret`, que ficam no back-end. É o fluxo recomendado pelas boas práticas atuais (RFC 9700 / OAuth 2.1). |
+| SPA ou app mobile (futuro) | **Authorization Code + PKCE** (cliente público, sem segredo) | O **Implicit Flow** foi descontinuado: entrega o token na URL, expondo-o a histórico, logs e scripts. |
+| Serviço de Relatórios | **Client Credentials** | Comunicação servidor-servidor: não existe usuário, a aplicação age em nome próprio. Não recebe refresh token. |
+
+## 3. Configuração
+1. **Registro da aplicação** no provedor (no laboratório: `src/config.js`): `client_id`, `client_secret` (guardado em variável de ambiente/cofre, nunca no Git), tipo de cliente e fluxos permitidos (`grant_types`).
+2. **URLs de redirecionamento**: lista exata, sempre HTTPS em produção (`https://app.exemplo.com.br/callback`), sem curingas. O provedor recusa qualquer outra — no lab, `http://site-malicioso.exemplo/callback` é bloqueada.
+3. **Escopos** (menor privilégio):
+
+| Escopo | Permite | Quem recebe |
+|---|---|---|
+| `saldo:read` | Consultar saldo | App Finanças |
+| `transacoes:read` | Consultar extrato | App Finanças |
+| `transacoes:write` | Transferências | Somente com consentimento explícito e, idealmente, autenticação forte (MFA) |
+| `relatorios:read` | Relatório consolidado | Serviço de Relatórios |
+
+4. **Proteções do pedido**: `state` aleatório por pedido (anti-CSRF), PKCE `S256` obrigatório, código de autorização de **uso único** com validade de 60 s.
+5. **Validação na API**: assinatura do JWT, `exp`, `iss`, `aud` e escopo por rota — 401 para token inválido/expirado, 403 para escopo insuficiente.
+
+## 4. Gestão de tokens
+| Token | Formato | Validade | Onde fica |
+|---|---|---|---|
+| Access token | JWT assinado | 5–15 min (lab: 2 min) | Memória do back-end do cliente |
+| Refresh token | Opaco (aleatório) | 30 min a alguns dias, conforme risco | Back-end do cliente (nunca em localStorage) |
+| Código de autorização | Opaco | 60 s, uso único | Trafega uma vez pelo navegador |
+
+**Exemplo prático:** às 10h00 o usuário autoriza o app e recebe access (expira 10h05) + refresh. Às 10h06 a API responde 401 → o back-end usa o refresh e recebe um **novo par** (rotação); o refresh antigo é invalidado. Se alguém reutilizar o refresh antigo, o provedor detecta o **reuso** e revoga toda a família de tokens, forçando novo login. No logout, o app chama `/revoke`.
+
+## 5. Comunicação com a equipe
+- Resumo de uma página + diagrama de sequência do fluxo; decisão registrada (ADR) no repositório.
+- Checklist obrigatório em code review (PKCE, `state`, redirect exato, escopos mínimos, segredos fora do código, validação `iss/aud/exp`).
+- Testes automatizados de segurança no CI (`npm test`) — o pipeline falha se uma regra for quebrada.
+- Demonstração ao vivo no laboratório e canal único de dúvidas; revisão do plano a cada mudança de escopo.
+
+## 6. Evidências do laboratório
+- [ ] Print do `npm test` com 25 OK
+- [ ] Print do consentimento no provedor e das claims do token
+- [ ] Print do 403 (escopo) e do erro de redirect_uri
+- [ ] Print da renovação e da detecção de reuso
+- [ ] Saída do `npm run cc`
+
+## Referências
+- SEDUC-SP. *Descomplicando o OAuth: autorização segura para APIs* — Programação Back-End, 2ª série, 4º bimestre, semana 25, aula 1.
+- [RFC 6749 — The OAuth 2.0 Authorization Framework](https://www.rfc-editor.org/rfc/rfc6749)
+- [RFC 7636 — PKCE](https://www.rfc-editor.org/rfc/rfc7636)
+- [RFC 9700 — Best Current Practice for OAuth 2.0 Security](https://www.rfc-editor.org/rfc/rfc9700)</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> <code>git branch</code> mostra <code>* lab2-auditoria</code>.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Switched to a new branch &#x27;lab2-auditoria&#x27;
+* lab2-auditoria
+  main</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>fatal: a branch named &#x27;lab2-auditoria&#x27; already exists</pre><p><b>Como corrigir:</b> A branch já existe: use git switch lab2-auditoria (sem -c).</p></div></div></article>
+<article class="cartao passo" id="passo4"><div class="passo-topo"><label><input type="checkbox" class="item" id="i14" data-rotulo="Passo 4"><span class="num">Passo 4</span><span class="tit">Definir a política de logs (config.js e .gitignore)</span></label><span class="amb">VS Code</span></div>
+<p>O bloco <code>AUDITORIA</code> é a <b>configuração de logs</b> do roteiro (item 2): onde gravar, tamanho para rotação, retenção, chaves de integridade e de cifra, limites de força bruta e webhook de alertas. Os logs ficam <b>fora do Git</b> (<code>logs/</code> no <code>.gitignore</code>) porque contêm dados pessoais e de segurança.</p>
+<details class="arq"><summary><code>src/config.js</code> <small>82 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/config.js</span><button class="copiar" type="button" aria-label="Copiar src/config.js">Copiar</button></div><pre><code>// =============================================================
+// config.js — &quot;Registro da aplicação&quot; no provedor OAuth
+// Equivale ao que se cadastra no console de um provedor real
+// (Google Cloud, Microsoft Entra, Auth0...): client_id, segredo,
+// URLs de redirecionamento permitidas, fluxos e escopos.
+// =============================================================
+const PORTAS = {
+  auth: Number(process.env.AUTH_PORT || 4000),      // Servidor de Autorização
+  api: Number(process.env.API_PORT || 5000),        // Servidor de Recursos (API financeira)
+  cliente: Number(process.env.CLIENT_PORT || 3000), // Aplicação cliente (App Finanças)
+};
+
+module.exports = {
+  PORTAS,
+  EMISSOR: `http://localhost:${PORTAS.auth}`,
+  AUDIENCIA_API: &#x27;api-financeira&#x27;,
+  // Em produção: segredo longo, guardado em variável de ambiente/cofre (NUNCA no Git)
+  SEGREDO_ASSINATURA: process.env.OAUTH_SEGREDO || &#x27;troque-este-segredo-em-producao&#x27;,
+
+  // Tempos de vida (segundos) — tokens de acesso curtos, refresh mais longo
+  ACCESS_TOKEN_TTL: Number(process.env.ACCESS_TTL || 120), // 2 min (didático; real: 5 a 15 min)
+  REFRESH_TOKEN_TTL: Number(process.env.REFRESH_TTL || 1800), // 30 min
+  CODE_TTL: 60, // código de autorização: uso único, vale 60 s
+
+  // Escopos = permissões granulares oferecidas pela API
+  ESCOPOS: {
+    &#x27;saldo:read&#x27;: &#x27;Consultar saldo da conta&#x27;,
+    &#x27;transacoes:read&#x27;: &#x27;Consultar extrato de transações&#x27;,
+    &#x27;transacoes:write&#x27;: &#x27;Criar transferências (operação sensível)&#x27;,
+    &#x27;relatorios:read&#x27;: &#x27;Gerar relatórios consolidados (servidor-servidor)&#x27;,
+  },
+
+  // Aplicações registradas no provedor
+  CLIENTES: [
+    {
+      client_id: &#x27;app-financas-web&#x27;,
+      client_secret: &#x27;segredo-app-web&#x27;, // cliente confidencial: o segredo fica só no back-end
+      nome: &#x27;App Finanças (Web)&#x27;,
+      redirect_uris: [`http://localhost:${PORTAS.cliente}/callback`], // lista exata (sem curingas)
+      grant_types: [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;],
+      escopos_permitidos: [&#x27;saldo:read&#x27;, &#x27;transacoes:read&#x27;, &#x27;transacoes:write&#x27;],
+    },
+    {
+      client_id: &#x27;servico-relatorios&#x27;,
+      client_secret: &#x27;segredo-relatorios&#x27;,
+      nome: &#x27;Serviço de Relatórios (back-end)&#x27;,
+      redirect_uris: [], // sem usuário, sem redirecionamento
+      grant_types: [&#x27;client_credentials&#x27;],
+      escopos_permitidos: [&#x27;relatorios:read&#x27;],
+    },
+  ],
+
+  // ===========================================================
+  // AUDITORIA E LOGS (Laboratório 2 — aula 3)
+  // ===========================================================
+  AUDITORIA: {
+    LOG_DIR: process.env.LOG_DIR || require(&#x27;node:path&#x27;).join(__dirname, &#x27;..&#x27;, &#x27;logs&#x27;),
+    // Rotação: ao passar deste tamanho o arquivo é renomeado (auditoria-&lt;data&gt;-NNN.log)
+    LOG_MAX_BYTES: Number(process.env.LOG_MAX_BYTES || 256 * 1024), // 256 KB (didático)
+    // Retenção: mantém no máximo N arquivos rotacionados e apaga os mais antigos que X dias
+    LOG_RETENCAO_ARQUIVOS: Number(process.env.LOG_RETENCAO_ARQUIVOS || 5),
+    LOG_RETENCAO_DIAS: Number(process.env.LOG_RETENCAO_DIAS || 30),
+    // Integridade: cada linha leva um HMAC encadeado com a anterior (detecta edição/remoção)
+    CHAVE_INTEGRIDADE: process.env.LOG_CHAVE_INTEGRIDADE || &#x27;chave-integridade-de-laboratorio&#x27;,
+    // Confidencialidade: dados sensíveis (ex.: login digitado errado) vão cifrados com AES-256-GCM
+    CHAVE_CIFRA: process.env.LOG_CHAVE_CIFRA || &#x27;chave-cifra-de-laboratorio&#x27;,
+    // Detecção de força bruta: N falhas de autenticação do mesmo IP em J segundos =&gt; alerta + bloqueio
+    EVENTOS_FALHA_AUTH: [&#x27;LOGIN_FALHA&#x27;, &#x27;CLIENTE_AUTH_FALHA&#x27;],
+    LIMITE_FALHAS: Number(process.env.LIMITE_FALHAS || 5),
+    JANELA_S: Number(process.env.JANELA_S || 60),
+    BLOQUEIO_S: Number(process.env.BLOQUEIO_S || 300),
+    // X-Forwarded-For só é confiável atrás de um proxy reverso SEU. No laboratório fica ligado
+    // para simular IPs diferentes; em produção, desligue se a API estiver exposta diretamente.
+    CONFIAR_PROXY: process.env.CONFIAR_PROXY !== &#x27;0&#x27;,
+    // Opcional: URL de webhook (ex.: Slack/Teams) que recebe os alertas críticos
+    ALERTA_WEBHOOK: process.env.ALERTA_WEBHOOK || &#x27;&#x27;,
+  },
+
+  // Usuário de demonstração (no provedor, nunca no cliente)
+  USUARIOS: [{ id: &#x27;u1&#x27;, login: &#x27;aluno&#x27;, senha: &#x27;senha123&#x27;, nome: &#x27;Aluno(a) Demo&#x27; }],
+};</code></pre></div></details>
+<details class="arq"><summary><code>.gitignore</code> <small>8 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>.gitignore</span><button class="copiar" type="button" aria-label="Copiar .gitignore">Copiar</button></div><pre><code>node_modules/
+.env
+*.log
+logs/
+relatorio/
+.servidor.pid
+relatorio-preparacao.csv</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você identifica LOG_MAX_BYTES, LOG_RETENCAO_*, LIMITE_FALHAS, JANELA_S e BLOQUEIO_S.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node -e &quot;console.log(require(&#x27;./src/config&#x27;).AUDITORIA.LIMITE_FALHAS)&quot;
+5</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>TypeError: Cannot read properties of undefined (reading &#x27;LIMITE_FALHAS&#x27;)</pre><p><b>Como corrigir:</b> O bloco AUDITORIA não foi colado dentro do module.exports de config.js.</p></div></div></article>
+<article class="cartao passo" id="passo5"><div class="passo-topo"><label><input type="checkbox" class="item" id="i15" data-rotulo="Passo 5"><span class="num">Passo 5</span><span class="tit">Criar o módulo de auditoria</span></label><span class="amb">VS Code</span></div>
+<p>Coração da seção: <code>registrar()</code> grava um evento JSON por linha; <code>mascarar()</code> troca segredos por impressão digital; <code>cifrar()</code> protege o login digitado; cada linha leva <code>hash_anterior</code> e <code>hash</code> (HMAC encadeado); <code>rotacionarSeNecessario()</code> e <code>aplicarRetencao()</code> controlam o armazenamento; <code>avaliarRegras()</code> dispara alertas e bloqueia IPs; <code>envolver()</code> gera o log de acesso e o <code>X-Request-Id</code>.</p>
+<details class="arq"><summary><code>src/auditoria.js</code> <small>250 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/auditoria.js</span><button class="copiar" type="button" aria-label="Copiar src/auditoria.js">Copiar</button></div><pre><code>// =============================================================
+// auditoria.js — LOG DE AUDITORIA estruturado e seguro
+//  * JSON Lines (1 evento por linha) — formato aceito por ELK,
+//    Splunk, Graylog, Loki... sem conversão
+//  * Mascaramento de segredos (senha, tokens, client_secret)
+//  * Cifra AES-256-GCM para dados sensíveis (login digitado)
+//  * Integridade: HMAC encadeado linha a linha
+//  * Rotação por tamanho + retenção por quantidade e idade
+//  * Regras de alerta: força bruta (com bloqueio de IP) e
+//    eventos CRÍTICOS (console, alertas.log e webhook opcional)
+// =============================================================
+const fs = require(&#x27;node:fs&#x27;);
+const path = require(&#x27;node:path&#x27;);
+const crypto = require(&#x27;node:crypto&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+
+const A = cfg.AUDITORIA;
+const arqAtual = (dir = A.LOG_DIR) =&gt; path.join(dir, &#x27;auditoria.log&#x27;);
+const arqAlertas = () =&gt; path.join(A.LOG_DIR, &#x27;alertas.log&#x27;);
+const PADRAO_ROTACIONADO = /^auditoria-\d{8}T\d{9}-\d{3}\.log$/;
+const CHAVE_AES = crypto.createHash(&#x27;sha256&#x27;).update(A.CHAVE_CIFRA).digest(); // produção: chave vinda de cofre/KMS
+
+let ultimoHash = null; // último elo da cadeia de integridade
+const memoria = []; // últimos eventos em memória (consultas rápidas e testes)
+const falhasPorIp = new Map(); // ip -&gt; [timestamps] (janela deslizante)
+const bloqueados = new Map(); // ip -&gt; expira em (ms)
+
+// ---------------------------------------------------------------- utilidades
+const hmac = (anterior, corpo) =&gt; crypto.createHmac(&#x27;sha256&#x27;, A.CHAVE_INTEGRIDADE).update(`${anterior}|${corpo}`).digest(&#x27;hex&#x27;);
+const impressao = (v) =&gt; `sha256:${crypto.createHash(&#x27;sha256&#x27;).update(String(v)).digest(&#x27;hex&#x27;).slice(0, 12)}`;
+
+function cifrar(texto) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv(&#x27;aes-256-gcm&#x27;, CHAVE_AES, iv);
+  const ct = Buffer.concat([c.update(String(texto), &#x27;utf8&#x27;), c.final()]);
+  return `gcm:${iv.toString(&#x27;base64url&#x27;)}.${ct.toString(&#x27;base64url&#x27;)}.${c.getAuthTag().toString(&#x27;base64url&#x27;)}`;
+}
+
+function decifrar(valor) {
+  const [iv, ct, tag] = String(valor).slice(4).split(&#x27;.&#x27;).map((x) =&gt; Buffer.from(x, &#x27;base64url&#x27;));
+  const d = crypto.createDecipheriv(&#x27;aes-256-gcm&#x27;, CHAVE_AES, iv);
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(ct), d.final()]).toString(&#x27;utf8&#x27;);
+}
+
+// Campos cujo NOME indica segredo nunca são gravados em claro:
+// strings viram uma impressão digital (permite correlacionar sem expor)
+const SENSIVEL = /(senha|password|secret|authorization|code_verifier|^code$|token)/i;
+function mascarar(valor, chave = &#x27;&#x27;) {
+  if (SENSIVEL.test(chave)) return typeof valor === &#x27;string&#x27; ? impressao(valor) : &#x27;[OCULTO]&#x27;;
+  if (Array.isArray(valor)) return valor.map((v) =&gt; mascarar(v));
+  if (valor &amp;&amp; typeof valor === &#x27;object&#x27;) {
+    return Object.fromEntries(Object.entries(valor).map(([k, v]) =&gt; [k, mascarar(v, k)]));
+  }
+  return valor;
+}
+
+// IP do cliente. X-Forwarded-For pode ser forjado: só use atrás de proxy confiável
+function ipDe(req) {
+  const xff = req.headers[&#x27;x-forwarded-for&#x27;];
+  if (A.CONFIAR_PROXY &amp;&amp; xff) return String(xff).split(&#x27;,&#x27;)[0].trim().slice(0, 45);
+  return String(req.socket?.remoteAddress || &#x27;&#x27;).replace(/^::ffff:/, &#x27;&#x27;);
+}
+
+// ---------------------------------------------------------------- arquivos
+function listarArquivos(dir = A.LOG_DIR) {
+  if (!fs.existsSync(dir)) return [];
+  const lista = fs.readdirSync(dir).filter((f) =&gt; PADRAO_ROTACIONADO.test(f)).sort().map((f) =&gt; path.join(dir, f));
+  if (fs.existsSync(arqAtual(dir))) lista.push(arqAtual(dir));
+  return lista; // ordem cronológica: rotacionados (mais antigo primeiro) + atual
+}
+
+function lerUltimoHash() {
+  const arquivos = listarArquivos();
+  for (let i = arquivos.length - 1; i &gt;= 0; i--) {
+    const linhas = fs.readFileSync(arquivos[i], &#x27;utf8&#x27;).split(&#x27;\n&#x27;).filter(Boolean);
+    if (linhas.length) {
+      try { return JSON.parse(linhas[linhas.length - 1]).hash || &#x27;SEM-HASH&#x27;; } catch { return &#x27;LINHA-CORROMPIDA&#x27;; }
+    }
+  }
+  return &#x27;GENESIS&#x27;;
+}
+
+function garantirInicio() {
+  if (ultimoHash !== null) return;
+  fs.mkdirSync(A.LOG_DIR, { recursive: true });
+  ultimoHash = lerUltimoHash(); // continua a cadeia após reiniciar o servidor
+}
+
+function aplicarRetencao() {
+  const rotacionados = listarArquivos().filter((f) =&gt; PADRAO_ROTACIONADO.test(path.basename(f)));
+  const limiteIdade = Date.now() - A.LOG_RETENCAO_DIAS * 86400000;
+  const expurgados = [];
+  rotacionados.forEach((f, i) =&gt; {
+    const excedeQuantidade = i &lt; rotacionados.length - A.LOG_RETENCAO_ARQUIVOS;
+    if (excedeQuantidade || fs.statSync(f).mtimeMs &lt; limiteIdade) {
+      fs.unlinkSync(f);
+      expurgados.push(path.basename(f));
+    }
+  });
+  return expurgados;
+}
+
+// Renomeia o arquivo atual quando ele passaria do limite. Devolve a informação da
+// rotação, que é gravada DENTRO do próximo evento (a própria rotação fica auditada).
+function rotacionarSeNecessario(bytesNovos) {
+  const atual = arqAtual();
+  if (!fs.existsSync(atual) || fs.statSync(atual).size + bytesNovos &lt;= A.LOG_MAX_BYTES) return null;
+  const ts = new Date().toISOString().replace(/[-:.]/g, &#x27;&#x27;).slice(0, 18); // 20261102T190512345
+  let n = 0;
+  let destino;
+  do { destino = path.join(A.LOG_DIR, `auditoria-${ts}-${String(n++).padStart(3, &#x27;0&#x27;)}.log`); } while (fs.existsSync(destino));
+  try {
+    fs.renameSync(atual, destino); // no Windows falha se outro programa travar o arquivo
+  } catch (e) {
+    console.error(`[auditoria] rotação adiada: ${e.message}`);
+    return null;
+  }
+  return { arquivo_rotacionado: path.basename(destino), expurgados: aplicarRetencao() };
+}
+
+// ---------------------------------------------------------------- registro
+function registrar(dados) {
+  garantirInicio();
+  const { req, ...resto } = dados;
+  const registro = { ts: new Date().toISOString(), nivel: &#x27;INFO&#x27;, ...mascarar(resto) };
+  if (req) {
+    if (!registro.ip) registro.ip = req.ipCliente || ipDe(req);
+    if (!registro.req_id &amp;&amp; req.idReq) registro.req_id = req.idReq;
+  }
+  const montar = () =&gt; {
+    registro.hash_anterior = ultimoHash;
+    delete registro.hash;
+    registro.hash = hmac(ultimoHash, JSON.stringify(registro));
+    return `${JSON.stringify(registro)}\n`;
+  };
+  let linha = montar();
+  const rotacao = rotacionarSeNecessario(Buffer.byteLength(linha));
+  if (rotacao) {
+    delete registro.hash_anterior;
+    registro.rotacao = rotacao;
+    linha = montar();
+  }
+  fs.appendFileSync(arqAtual(), linha, { mode: 0o600 }); // síncrono: ordem garantida
+  ultimoHash = registro.hash;
+  memoria.push(registro);
+  if (memoria.length &gt; 2000) memoria.shift();
+  avaliarRegras(registro);
+  return registro;
+}
+
+// ---------------------------------------------------------------- regras / alertas
+function estaBloqueado(ip) {
+  const ate = bloqueados.get(ip);
+  if (!ate) return false;
+  if (Date.now() &gt; ate) { bloqueados.delete(ip); return false; }
+  return true;
+}
+
+function emitirAlerta(r) {
+  const texto = `[ALERTA ${r.nivel}] ${r.ts} ${r.tipo} ip=${r.ip || &#x27;-&#x27;} ${r.motivo || r.acao || &#x27;&#x27;}`;
+  if (!process.env.OAUTH_QUIET) console.error(`\x1b[41m\x1b[97m${texto}\x1b[0m`);
+  fs.appendFileSync(arqAlertas(), `${JSON.stringify(r)}\n`, { mode: 0o600 });
+  if (A.ALERTA_WEBHOOK) {
+    fetch(A.ALERTA_WEBHOOK, { method: &#x27;POST&#x27;, headers: { &#x27;Content-Type&#x27;: &#x27;application/json&#x27; }, body: JSON.stringify({ text: texto }) })
+      .catch((e) =&gt; console.error(`[auditoria] webhook falhou: ${e.message}`));
+  }
+}
+
+function avaliarRegras(r) {
+  if (r.nivel === &#x27;CRITICO&#x27;) emitirAlerta(r);
+  if (!A.EVENTOS_FALHA_AUTH.includes(r.tipo) || !r.ip) return;
+  const agora = Date.now();
+  const janela = (falhasPorIp.get(r.ip) || []).filter((t) =&gt; agora - t &lt; A.JANELA_S * 1000);
+  janela.push(agora);
+  falhasPorIp.set(r.ip, janela);
+  if (janela.length &gt;= A.LIMITE_FALHAS &amp;&amp; !estaBloqueado(r.ip)) {
+    bloqueados.set(r.ip, agora + A.BLOQUEIO_S * 1000);
+    falhasPorIp.delete(r.ip);
+    registrar({ tipo: &#x27;ALERTA_FORCA_BRUTA&#x27;, nivel: &#x27;CRITICO&#x27;, origem: r.origem, ip: r.ip, req_id: r.req_id, falhas: janela.length, janela_s: A.JANELA_S, acao: `IP bloqueado por ${A.BLOQUEIO_S}s` });
+  }
+}
+
+// ---------------------------------------------------------------- middleware HTTP
+// Envolve o handler: gera/propaga X-Request-Id, mede a duração e grava o log de acesso.
+// A query string NÃO é gravada (pode conter code, state e outros dados sensíveis).
+function envolver(origem, handler) {
+  return (req, res) =&gt; {
+    const recebido = String(req.headers[&#x27;x-request-id&#x27;] || &#x27;&#x27;);
+    req.idReq = /^[A-Za-z0-9._-]{8,64}$/.test(recebido) ? recebido : crypto.randomUUID(); // evita injeção no log
+    req.ipCliente = ipDe(req);
+    res.setHeader(&#x27;X-Request-Id&#x27;, req.idReq);
+    const inicio = process.hrtime.bigint();
+    res.on(&#x27;finish&#x27;, () =&gt; {
+      const status = res.statusCode;
+      registrar({
+        tipo: &#x27;HTTP_REQUISICAO&#x27;, nivel: status &gt;= 500 ? &#x27;ERRO&#x27; : status &gt;= 400 ? &#x27;AVISO&#x27; : &#x27;INFO&#x27;, origem,
+        metodo: req.method, rota: new URL(req.url, &#x27;http://local&#x27;).pathname, status,
+        duracao_ms: Math.round(Number(process.hrtime.bigint() - inicio) / 1e4) / 100,
+        user_agent: String(req.headers[&#x27;user-agent&#x27;] || &#x27;&#x27;).slice(0, 120), req,
+      });
+    });
+    return handler(req, res);
+  };
+}
+
+// ---------------------------------------------------------------- verificação
+function verificarIntegridade(dir = A.LOG_DIR) {
+  const arquivos = listarArquivos(dir);
+  const erros = [];
+  let anterior = null;
+  let total = 0;
+  let ancora = null;
+  for (const arq of arquivos) {
+    const nome = path.basename(arq);
+    fs.readFileSync(arq, &#x27;utf8&#x27;).split(&#x27;\n&#x27;).forEach((linha, i) =&gt; {
+      if (!linha.trim()) return;
+      total++;
+      let r;
+      try { r = JSON.parse(linha); } catch {
+        erros.push({ arquivo: nome, linha: i + 1, motivo: &#x27;linha não é JSON válido&#x27; });
+        anterior = null;
+        return;
+      }
+      const { hash, ...corpo } = r;
+      if (anterior === null &amp;&amp; !ancora) ancora = { arquivo: nome, linha: i + 1, completa: r.hash_anterior === &#x27;GENESIS&#x27; };
+      else if (anterior !== null &amp;&amp; r.hash_anterior !== anterior) erros.push({ arquivo: nome, linha: i + 1, motivo: &#x27;encadeamento quebrado (linha removida, inserida ou reordenada)&#x27; });
+      if (hmac(r.hash_anterior, JSON.stringify(corpo)) !== hash) erros.push({ arquivo: nome, linha: i + 1, motivo: &#x27;conteúdo alterado (HMAC não confere)&#x27; });
+      anterior = hash;
+    });
+  }
+  return { ok: erros.length === 0, total, arquivos: arquivos.map((a) =&gt; path.basename(a)), ancora, erros };
+}
+
+function lerEventos(dir = A.LOG_DIR) {
+  const eventos = [];
+  for (const arq of listarArquivos(dir)) {
+    for (const linha of fs.readFileSync(arq, &#x27;utf8&#x27;).split(&#x27;\n&#x27;)) {
+      if (!linha.trim()) continue;
+      try { eventos.push(JSON.parse(linha)); } catch { /* linha corrompida: apontada pela verificação */ }
+    }
+  }
+  return eventos;
+}
+
+module.exports = {
+  registrar, envolver, estaBloqueado, cifrar, decifrar, impressao, mascarar,
+  verificarIntegridade, lerEventos, listarArquivos, memoria,
+};</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você localiza onde a query string deixa de ser gravada e por quê.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\auditoria.js   (sem saída)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Error: Cannot find module &#x27;./config&#x27;</pre><p><b>Como corrigir:</b> auditoria.js precisa estar em src\, ao lado de config.js.</p></div></div></article>
+<article class="cartao passo" id="passo6"><div class="passo-topo"><label><input type="checkbox" class="item" id="i16" data-rotulo="Passo 6"><span class="num">Passo 6</span><span class="tit">Instrumentar o Servidor de Autorização</span></label><span class="amb">VS Code</span></div>
+<p>Novos eventos: <code>LOGIN_SUCESSO</code>, <code>LOGIN_FALHA</code> (login cifrado), <code>CLIENTE_AUTH_FALHA</code>, <code>TOKEN_EMITIDO</code> (com <code>jti</code>), <code>TOKEN_RECUSADO</code>, <code>REFRESH_REUSO</code> (CRÍTICO), <code>TOKEN_REVOGADO</code>, <code>AUTORIZACAO_RECUSADA</code>. IP bloqueado recebe <b>429</b> com <code>Retry-After</code>. Erros 500 não expõem detalhes ao cliente — só ao log.</p>
+<details class="arq"><summary><code>src/auth-server.js</code> <small>299 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/auth-server.js</span><button class="copiar" type="button" aria-label="Copiar src/auth-server.js">Copiar</button></div><pre><code>// =============================================================
+// auth-server.js — SERVIDOR DE AUTORIZAÇÃO (porta 4000)
+// Implementa: Authorization Code + PKCE, Refresh Token (com
+// rotação e detecção de reuso), Client Credentials e revogação.
+// Lab 2: registra eventos de auditoria e bloqueia IPs com
+// excesso de falhas de autenticação (força bruta).
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCorpo, json, html, redirecionar, aleatorio, sha256b64url, iguaisSeguro, esc, pagina } = require(&#x27;./util&#x27;);
+const auditoria = require(&#x27;./auditoria&#x27;);
+
+const audit = (req, tipo, extra = {}) =&gt; auditoria.registrar({ origem: &#x27;auth&#x27;, tipo, req, ...extra });
+
+// IP em bloqueio temporário (força bruta): responde 429 sem processar o pedido
+function recusarSeBloqueado(req, res, comoHtml = false) {
+  if (!auditoria.estaBloqueado(req.ipCliente)) return false;
+  audit(req, &#x27;REQUISICAO_BLOQUEADA&#x27;, { nivel: &#x27;AVISO&#x27;, rota: new URL(req.url, cfg.EMISSOR).pathname, motivo: &#x27;IP em bloqueio temporário por força bruta&#x27; });
+  const extras = { &#x27;Retry-After&#x27;: String(cfg.AUDITORIA.BLOQUEIO_S) };
+  if (comoHtml) html(res, 429, paginaErro(&#x27;Muitas tentativas de login falharam a partir deste endereço. Aguarde alguns minutos e tente de novo.&#x27;), extras);
+  else json(res, 429, { error: &#x27;too_many_requests&#x27;, error_description: &#x27;Muitas falhas de autenticação deste IP. Tente mais tarde.&#x27; }, extras);
+  return true;
+}
+
+// client_id que o chamador AFIRMA ser (para registrar falhas de autenticação do cliente)
+function idInformado(req, corpo) {
+  const auth = req.headers.authorization || &#x27;&#x27;;
+  if (auth.startsWith(&#x27;Basic &#x27;)) return decodeURIComponent(Buffer.from(auth.slice(6), &#x27;base64&#x27;).toString().split(&#x27;:&#x27;)[0] || &#x27;&#x27;).slice(0, 80);
+  return String(corpo.client_id || &#x27;&#x27;).slice(0, 80);
+}
+
+const codigos = new Map(); // code -&gt; { client_id, redirect_uri, escopos, sub, code_challenge, exp }
+const refreshTokens = new Map(); // refresh -&gt; { sub, client_id, escopos, exp, familia }
+const refreshUsados = new Map(); // refresh já trocado -&gt; familia (para detectar reuso)
+
+const agora = () =&gt; Math.floor(Date.now() / 1000);
+const buscarCliente = (id) =&gt; cfg.CLIENTES.find((c) =&gt; c.client_id === id);
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[auth]&#x27;, ...a); };
+
+function validarEscopo(cliente, scope) {
+  const pedidos = String(scope || &#x27;&#x27;).split(&#x27; &#x27;).filter(Boolean);
+  if (!pedidos.length) return null;
+  return pedidos.every((e) =&gt; cliente.escopos_permitidos.includes(e)) ? pedidos : null;
+}
+
+function autenticarCliente(req, corpo) {
+  let id = corpo.client_id;
+  let segredo = corpo.client_secret;
+  const auth = req.headers.authorization || &#x27;&#x27;;
+  if (auth.startsWith(&#x27;Basic &#x27;)) {
+    const [i, s] = Buffer.from(auth.slice(6), &#x27;base64&#x27;).toString().split(&#x27;:&#x27;);
+    id = decodeURIComponent(i || &#x27;&#x27;);
+    segredo = decodeURIComponent(s || &#x27;&#x27;);
+  }
+  const cliente = buscarCliente(id);
+  return cliente &amp;&amp; iguaisSeguro(cliente.client_secret, segredo) ? cliente : null;
+}
+
+function emitirAccessToken(sub, client_id, escopos) {
+  const iat = agora();
+  return jwt.assinar(
+    { iss: cfg.EMISSOR, aud: cfg.AUDIENCIA_API, sub, client_id, scope: escopos.join(&#x27; &#x27;), iat, exp: iat + cfg.ACCESS_TOKEN_TTL, jti: aleatorio(8) },
+    cfg.SEGREDO_ASSINATURA
+  );
+}
+
+function emitirTokens(sub, client_id, escopos, comRefresh, familia = aleatorio(8)) {
+  const r = { access_token: emitirAccessToken(sub, client_id, escopos), token_type: &#x27;Bearer&#x27;, expires_in: cfg.ACCESS_TOKEN_TTL, scope: escopos.join(&#x27; &#x27;) };
+  if (comRefresh) {
+    r.refresh_token = aleatorio(32); // opaco: só o provedor sabe o que significa
+    r.refresh_expires_in = cfg.REFRESH_TOKEN_TTL;
+    refreshTokens.set(r.refresh_token, { sub, client_id, escopos, exp: agora() + cfg.REFRESH_TOKEN_TTL, familia });
+  }
+  return r;
+}
+
+function revogarFamilia(familia) {
+  for (const [token, d] of refreshTokens) if (d.familia === familia) refreshTokens.delete(token);
+}
+
+// ---------- /authorize -------------------------------------------------
+function validarPedido(p) {
+  const cliente = buscarCliente(p.client_id);
+  if (!cliente) return { fatal: &#x27;client_id desconhecido: a aplicação não está registrada no provedor.&#x27; };
+  if (!cliente.redirect_uris.includes(p.redirect_uri)) {
+    return { fatal: `redirect_uri não registrada para &quot;${cliente.client_id}&quot;: ${p.redirect_uri}. Por segurança o provedor NÃO redireciona para URLs desconhecidas (evita roubo do código).` };
+  }
+  const erro = (error, error_description) =&gt; ({ cliente, erro: { error, error_description } });
+  if (!cliente.grant_types.includes(&#x27;authorization_code&#x27;)) return erro(&#x27;unauthorized_client&#x27;, &#x27;Cliente não habilitado para o Authorization Code Flow.&#x27;);
+  if (p.response_type !== &#x27;code&#x27;) return erro(&#x27;unsupported_response_type&#x27;, &#x27;Use response_type=code. O Implicit Flow (response_type=token) é desaconselhado pelas boas práticas atuais.&#x27;);
+  const escopos = validarEscopo(cliente, p.scope);
+  if (!escopos) return erro(&#x27;invalid_scope&#x27;, &#x27;Escopo ausente ou não permitido para este cliente.&#x27;);
+  if (!p.code_challenge || p.code_challenge_method !== &#x27;S256&#x27;) return erro(&#x27;invalid_request&#x27;, &#x27;PKCE obrigatório: envie code_challenge com code_challenge_method=S256.&#x27;);
+  if (!p.state) return erro(&#x27;invalid_request&#x27;, &#x27;Parâmetro state obrigatório (proteção contra CSRF).&#x27;);
+  return { cliente, escopos };
+}
+
+function voltarComErro(res, p, erro) {
+  const u = new URL(p.redirect_uri);
+  u.searchParams.set(&#x27;error&#x27;, erro.error);
+  u.searchParams.set(&#x27;error_description&#x27;, erro.error_description);
+  if (p.state) u.searchParams.set(&#x27;state&#x27;, p.state);
+  redirecionar(res, u.toString());
+}
+
+function paginaErro(msg) {
+  return pagina(&#x27;Provedor OAuth — erro&#x27;, `&lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+  &lt;h1&gt;Pedido de autorização recusado&lt;/h1&gt;&lt;p class=&quot;erro&quot;&gt;${esc(msg)}&lt;/p&gt;
+  &lt;a class=&quot;btn sec&quot; href=&quot;http://localhost:${cfg.PORTAS.cliente}/&quot;&gt;Voltar ao App Finanças&lt;/a&gt;`, &#x27;#7c3aed&#x27;);
+}
+
+function telaConsentimento(p, cliente, escopos, mensagem = &#x27;&#x27;) {
+  const campos = [&#x27;client_id&#x27;, &#x27;redirect_uri&#x27;, &#x27;response_type&#x27;, &#x27;scope&#x27;, &#x27;state&#x27;, &#x27;code_challenge&#x27;, &#x27;code_challenge_method&#x27;]
+    .map((k) =&gt; `&lt;input type=&quot;hidden&quot; name=&quot;${k}&quot; value=&quot;${esc(p[k])}&quot;&gt;`).join(&#x27;&#x27;);
+  return pagina(&#x27;Provedor OAuth — login e consentimento&#x27;, `
+  &lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+  &lt;h1&gt;Entrar no Provedor OAuth&lt;/h1&gt;
+  &lt;p&gt;A aplicação &lt;b&gt;${esc(cliente.nome)}&lt;/b&gt; (&lt;code&gt;${esc(cliente.client_id)}&lt;/code&gt;) solicita acesso a:&lt;/p&gt;
+  &lt;ul&gt;${escopos.map((e) =&gt; `&lt;li&gt;&lt;code&gt;${esc(e)}&lt;/code&gt; — ${esc(cfg.ESCOPOS[e] || &#x27;&#x27;)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ul&gt;
+  ${mensagem ? `&lt;p class=&quot;erro&quot;&gt;${esc(mensagem)}&lt;/p&gt;` : &#x27;&#x27;}
+  &lt;form method=&quot;post&quot; action=&quot;/authorize&quot; class=&quot;bloco&quot;&gt;${campos}
+    &lt;label&gt;Usuário &lt;input name=&quot;login&quot; value=&quot;aluno&quot; autocomplete=&quot;username&quot;&gt;&lt;/label&gt;
+    &lt;label&gt;Senha &lt;input name=&quot;senha&quot; type=&quot;password&quot; placeholder=&quot;senha123&quot; autocomplete=&quot;current-password&quot;&gt;&lt;/label&gt;
+    &lt;p class=&quot;dica&quot;&gt;A senha é digitada &lt;b&gt;somente aqui, no provedor&lt;/b&gt;. O App Finanças nunca a recebe.&lt;/p&gt;
+    &lt;button name=&quot;decisao&quot; value=&quot;permitir&quot;&gt;Permitir acesso&lt;/button&gt;
+    &lt;button name=&quot;decisao&quot; value=&quot;negar&quot; class=&quot;sec&quot;&gt;Negar&lt;/button&gt;
+  &lt;/form&gt;`, &#x27;#7c3aed&#x27;);
+}
+
+function registrarRecusa(req, p, v) {
+  audit(req, &#x27;AUTORIZACAO_RECUSADA&#x27;, { nivel: &#x27;AVISO&#x27;, client_id: String(p.client_id || &#x27;&#x27;).slice(0, 80), redirect_uri: String(p.redirect_uri || &#x27;&#x27;).slice(0, 200), motivo: v.fatal ? &#x27;redirect_uri ou client_id não registrados&#x27; : v.erro.error });
+}
+
+function getAuthorize(req, res, url) {
+  const p = Object.fromEntries(url.searchParams);
+  const v = validarPedido(p);
+  if (v.fatal || v.erro) registrarRecusa(req, p, v);
+  if (v.fatal) return html(res, 400, paginaErro(v.fatal));
+  if (v.erro) return voltarComErro(res, p, v.erro);
+  html(res, 200, telaConsentimento(p, v.cliente, v.escopos));
+}
+
+async function postAuthorize(req, res) {
+  if (recusarSeBloqueado(req, res, true)) return;
+  const p = await lerCorpo(req);
+  const v = validarPedido(p);
+  if (v.fatal || v.erro) registrarRecusa(req, p, v);
+  if (v.fatal) return html(res, 400, paginaErro(v.fatal));
+  if (v.erro) return voltarComErro(res, p, v.erro);
+  if (p.decisao === &#x27;negar&#x27;) {
+    audit(req, &#x27;CONSENTIMENTO_NEGADO&#x27;, { client_id: p.client_id });
+    return voltarComErro(res, p, { error: &#x27;access_denied&#x27;, error_description: &#x27;O usuário negou o acesso.&#x27; });
+  }
+  const usuario = cfg.USUARIOS.find((u) =&gt; u.login === p.login &amp;&amp; iguaisSeguro(u.senha, p.senha));
+  if (!usuario) {
+    // o login digitado vai CIFRADO: usuários às vezes digitam a senha no campo de login
+    audit(req, &#x27;LOGIN_FALHA&#x27;, { nivel: &#x27;AVISO&#x27;, client_id: p.client_id, login_cifrado: auditoria.cifrar(String(p.login || &#x27;&#x27;).slice(0, 100)) });
+    return html(res, 401, telaConsentimento(p, v.cliente, v.escopos, &#x27;Usuário ou senha inválidos.&#x27;));
+  }
+  audit(req, &#x27;LOGIN_SUCESSO&#x27;, { sub: usuario.id, client_id: p.client_id, escopos: v.escopos });
+  const code = aleatorio(24);
+  codigos.set(code, { client_id: p.client_id, redirect_uri: p.redirect_uri, escopos: v.escopos, sub: usuario.id, code_challenge: p.code_challenge, exp: agora() + cfg.CODE_TTL });
+  log(`código emitido para ${p.client_id} (usuário ${usuario.login}, escopos: ${v.escopos.join(&#x27; &#x27;)})`);
+  const u = new URL(p.redirect_uri);
+  u.searchParams.set(&#x27;code&#x27;, code);
+  u.searchParams.set(&#x27;state&#x27;, p.state);
+  redirecionar(res, u.toString());
+}
+
+// ---------- /token -----------------------------------------------------
+function responderTokens(req, res, grant, sub, cliente, escopos, comRefresh, familia) {
+  const tokens = emitirTokens(sub, cliente.client_id, escopos, comRefresh, familia);
+  audit(req, &#x27;TOKEN_EMITIDO&#x27;, { grant_type: grant, client_id: cliente.client_id, sub, scope: tokens.scope, jti: jwt.decodificar(tokens.access_token).jti });
+  return json(res, 200, tokens);
+}
+
+async function postToken(req, res) {
+  if (recusarSeBloqueado(req, res)) return;
+  const corpo = await lerCorpo(req);
+  const grant = String(corpo.grant_type || &#x27;&#x27;).slice(0, 40);
+  const recusar = (status, error, d, nivel = &#x27;AVISO&#x27;) =&gt; {
+    audit(req, &#x27;TOKEN_RECUSADO&#x27;, { nivel, grant_type: grant, client_id: idInformado(req, corpo), erro: error, motivo: d });
+    return json(res, status, { error, error_description: d });
+  };
+  const erroGrant = (d) =&gt; recusar(400, &#x27;invalid_grant&#x27;, d);
+  const suportados = [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;, &#x27;client_credentials&#x27;];
+  if (!suportados.includes(grant)) return recusar(400, &#x27;unsupported_grant_type&#x27;, `Use: ${suportados.join(&#x27;, &#x27;)}`);
+
+  const cliente = autenticarCliente(req, corpo);
+  if (!cliente) {
+    audit(req, &#x27;CLIENTE_AUTH_FALHA&#x27;, { nivel: &#x27;AVISO&#x27;, client_id: idInformado(req, corpo), grant_type: grant });
+    return json(res, 401, { error: &#x27;invalid_client&#x27;, error_description: &#x27;Falha na autenticação do cliente (client_id/client_secret).&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Basic realm=&quot;oauth&quot;&#x27; });
+  }
+  if (!cliente.grant_types.includes(grant)) return recusar(400, &#x27;unauthorized_client&#x27;, `Cliente não habilitado para ${grant}.`);
+
+  if (corpo.grant_type === &#x27;authorization_code&#x27;) {
+    const d = codigos.get(corpo.code);
+    codigos.delete(corpo.code); // uso único — descartado mesmo se a troca falhar
+    if (!d || d.exp &lt; agora()) return erroGrant(&#x27;Código inválido, expirado ou já utilizado.&#x27;);
+    if (d.client_id !== cliente.client_id) return erroGrant(&#x27;Código emitido para outro cliente.&#x27;);
+    if (d.redirect_uri !== corpo.redirect_uri) return erroGrant(&#x27;redirect_uri diferente da usada na autorização.&#x27;);
+    if (!corpo.code_verifier || sha256b64url(corpo.code_verifier) !== d.code_challenge) return erroGrant(&#x27;PKCE: code_verifier não confere com o code_challenge.&#x27;);
+    log(`tokens emitidos (authorization_code) para ${cliente.client_id}`);
+    return responderTokens(req, res, grant, d.sub, cliente, d.escopos, true);
+  }
+
+  if (corpo.grant_type === &#x27;refresh_token&#x27;) {
+    const rt = corpo.refresh_token;
+    if (refreshUsados.has(rt)) {
+      revogarFamilia(refreshUsados.get(rt));
+      log(&#x27;ALERTA: reuso de refresh token — família revogada&#x27;);
+      audit(req, &#x27;REFRESH_REUSO&#x27;, { nivel: &#x27;CRITICO&#x27;, client_id: cliente.client_id, refresh_token: rt, motivo: &#x27;refresh token já trocado foi reapresentado (possível roubo); família revogada&#x27; });
+      return erroGrant(&#x27;REUSO de refresh token detectado: todos os tokens desta sessão foram revogados. Faça login novamente.&#x27;);
+    }
+    const d = refreshTokens.get(rt);
+    if (!d || d.client_id !== cliente.client_id) return erroGrant(&#x27;Refresh token inválido ou revogado.&#x27;);
+    if (d.exp &lt; agora()) {
+      refreshTokens.delete(rt);
+      return erroGrant(&#x27;Refresh token expirado: faça login novamente.&#x27;);
+    }
+    refreshTokens.delete(rt); // ROTAÇÃO: o antigo deixa de valer...
+    refreshUsados.set(rt, d.familia); // ...e passa a ser vigiado
+    log(`tokens renovados (refresh_token) para ${cliente.client_id}`);
+    return responderTokens(req, res, grant, d.sub, cliente, d.escopos, true, d.familia);
+  }
+
+  // client_credentials: a aplicação age em nome PRÓPRIO (sem usuário, sem refresh)
+  const escopos = validarEscopo(cliente, corpo.scope || cliente.escopos_permitidos.join(&#x27; &#x27;));
+  if (!escopos) return recusar(400, &#x27;invalid_scope&#x27;, &#x27;Escopo não permitido para este cliente.&#x27;);
+  log(`token emitido (client_credentials) para ${cliente.client_id}`);
+  return responderTokens(req, res, grant, cliente.client_id, cliente, escopos, false);
+}
+
+// ---------- /revoke (RFC 7009) -----------------------------------------
+async function postRevoke(req, res) {
+  const corpo = await lerCorpo(req);
+  const cliente = autenticarCliente(req, corpo);
+  if (!cliente) {
+    audit(req, &#x27;CLIENTE_AUTH_FALHA&#x27;, { nivel: &#x27;AVISO&#x27;, client_id: idInformado(req, corpo), grant_type: &#x27;revoke&#x27; });
+    return json(res, 401, { error: &#x27;invalid_client&#x27; });
+  }
+  const d = refreshTokens.get(corpo.token);
+  if (d) revogarFamilia(d.familia);
+  audit(req, &#x27;TOKEN_REVOGADO&#x27;, { client_id: cliente.client_id, sub: d?.sub, encontrado: Boolean(d) });
+  json(res, 200, { revogado: true }); // responde 200 mesmo se o token não existir
+}
+
+function metadados() {
+  const e = cfg.EMISSOR;
+  return {
+    issuer: e,
+    authorization_endpoint: `${e}/authorize`,
+    token_endpoint: `${e}/token`,
+    revocation_endpoint: `${e}/revoke`,
+    response_types_supported: [&#x27;code&#x27;],
+    grant_types_supported: [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;, &#x27;client_credentials&#x27;],
+    code_challenge_methods_supported: [&#x27;S256&#x27;],
+    token_endpoint_auth_methods_supported: [&#x27;client_secret_basic&#x27;, &#x27;client_secret_post&#x27;],
+    scopes_supported: Object.keys(cfg.ESCOPOS),
+  };
+}
+
+function criarServidor() {
+  return http.createServer(auditoria.envolver(&#x27;auth&#x27;, async (req, res) =&gt; {
+    const url = new URL(req.url, cfg.EMISSOR);
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/authorize&#x27;) return getAuthorize(req, res, url);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/authorize&#x27;) return await postAuthorize(req, res);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/token&#x27;) return await postToken(req, res);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/revoke&#x27;) return await postRevoke(req, res);
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/.well-known/oauth-authorization-server&#x27;) return json(res, 200, metadados());
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) {
+        const lista = cfg.CLIENTES.map((c) =&gt; ({ client_id: c.client_id, nome: c.nome, redirect_uris: c.redirect_uris, grant_types: c.grant_types, escopos_permitidos: c.escopos_permitidos }));
+        return html(res, 200, pagina(&#x27;Provedor OAuth&#x27;, `&lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+          &lt;h1&gt;Provedor OAuth (didático)&lt;/h1&gt;&lt;h2&gt;Aplicações registradas (segredos ocultos)&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(lista, null, 2))}&lt;/pre&gt;
+          &lt;h2&gt;Metadados&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(metadados(), null, 2))}&lt;/pre&gt;`, &#x27;#7c3aed&#x27;));
+      }
+      json(res, 404, { error: &#x27;not_found&#x27; });
+    } catch (e) {
+      console.error(&#x27;[auth] erro:&#x27;, e);
+      audit(req, &#x27;ERRO_SERVIDOR&#x27;, { nivel: &#x27;ERRO&#x27;, motivo: e.message });
+      json(res, 500, { error: &#x27;server_error&#x27;, error_description: &#x27;Erro interno.&#x27; }); // detalhe só no log
+    }
+  }));
+}
+
+function iniciar(porta = cfg.PORTAS.auth) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`Servidor de Autorização em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você aponta os dois eventos que contam como falha de autenticação para a regra de força bruta.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\auth-server.js   (sem saída)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>ReferenceError: auditoria is not defined</pre><p><b>Como corrigir:</b> Falta const auditoria = require(&#x27;./auditoria&#x27;); no topo do arquivo.</p></div></div></article>
+<article class="cartao passo" id="passo7"><div class="passo-topo"><label><input type="checkbox" class="item" id="i17" data-rotulo="Passo 7"><span class="num">Passo 7</span><span class="tit">Instrumentar a API e o App Finanças</span></label><span class="amb">VS Code</span></div>
+<p>A API registra <code>ACESSO_PERMITIDO</code>, <code>ACESSO_NEGADO</code> (401/403 com motivo), <code>OPERACAO_SENSIVEL</code> e <code>ALERTA_TOKEN_ADULTERADO</code> (CRÍTICO). O App Finanças repassa o seu <code>X-Request-Id</code> ao provedor e à API: uma ação do usuário vira um rastro único nos três serviços.</p>
+<details class="arq"><summary><code>src/api-financeira.js</code> <small>118 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/api-financeira.js</span><button class="copiar" type="button" aria-label="Copiar src/api-financeira.js">Copiar</button></div><pre><code>// =============================================================
+// api-financeira.js — SERVIDOR DE RECURSOS (porta 5000)
+// Valida o access token (assinatura, expiração, emissor,
+// audiência) e exige o ESCOPO certo para cada rota.
+// Lab 2: registra acessos permitidos/negados, operações
+// sensíveis e alerta tokens adulterados.
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCorpo, json } = require(&#x27;./util&#x27;);
+const auditoria = require(&#x27;./auditoria&#x27;);
+
+const audit = (req, tipo, extra = {}) =&gt;
+  auditoria.registrar({ origem: &#x27;api&#x27;, tipo, req, rota: new URL(req.url, &#x27;http://local&#x27;).pathname, ...extra });
+
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[api]&#x27;, ...a); };
+
+const contas = {
+  u1: {
+    saldo: 2350.75,
+    transacoes: [
+      { id: 1, data: &#x27;2026-10-01&#x27;, descricao: &#x27;Salário&#x27;, valor: 3200.0 },
+      { id: 2, data: &#x27;2026-10-05&#x27;, descricao: &#x27;Aluguel&#x27;, valor: -1100.0 },
+      { id: 3, data: &#x27;2026-10-12&#x27;, descricao: &#x27;Supermercado&#x27;, valor: -412.35 },
+      { id: 4, data: &#x27;2026-10-20&#x27;, descricao: &#x27;Conta de energia&#x27;, valor: -186.9 },
+      { id: 5, data: &#x27;2026-10-28&#x27;, descricao: &#x27;Pix recebido&#x27;, valor: 850.0 },
+    ],
+  },
+};
+
+// Middleware de autorização: devolve as claims ou responde 401/403
+function autorizar(req, res, escopoExigido) {
+  const auth = req.headers.authorization || &#x27;&#x27;;
+  if (!auth.startsWith(&#x27;Bearer &#x27;)) {
+    audit(req, &#x27;ACESSO_NEGADO&#x27;, { nivel: &#x27;AVISO&#x27;, status: 401, motivo: &#x27;sem token&#x27;, escopo_exigido: escopoExigido });
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: &#x27;Envie o cabeçalho Authorization: Bearer &lt;access_token&gt;.&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer realm=&quot;api-financeira&quot;&#x27; });
+    return null;
+  }
+  let claims;
+  try {
+    claims = jwt.verificar(auth.slice(7), cfg.SEGREDO_ASSINATURA);
+  } catch (e) {
+    const claims = jwt.decodificar(auth.slice(7)) || {};
+    if (e.message.startsWith(&#x27;assinatura&#x27;)) {
+      // assinatura inválida = alguém fabricou ou alterou o token: evento CRÍTICO
+      audit(req, &#x27;ALERTA_TOKEN_ADULTERADO&#x27;, { nivel: &#x27;CRITICO&#x27;, status: 401, sub_alegado: claims.sub, scope_alegado: claims.scope, motivo: e.message });
+    } else {
+      audit(req, &#x27;ACESSO_NEGADO&#x27;, { nivel: &#x27;AVISO&#x27;, status: 401, motivo: e.message, sub: claims.sub, client_id: claims.client_id, jti: claims.jti });
+    }
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: e.message }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer realm=&quot;api-financeira&quot;, error=&quot;invalid_token&quot;&#x27; });
+    return null;
+  }
+  if (claims.iss !== cfg.EMISSOR || claims.aud !== cfg.AUDIENCIA_API) {
+    audit(req, &#x27;ACESSO_NEGADO&#x27;, { nivel: &#x27;AVISO&#x27;, status: 401, motivo: &#x27;iss/aud inválidos&#x27;, sub: claims.sub, jti: claims.jti });
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: &#x27;Emissor (iss) ou audiência (aud) inválidos.&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer error=&quot;invalid_token&quot;&#x27; });
+    return null;
+  }
+  const escopos = String(claims.scope || &#x27;&#x27;).split(&#x27; &#x27;);
+  if (!escopos.includes(escopoExigido)) {
+    audit(req, &#x27;ACESSO_NEGADO&#x27;, { nivel: &#x27;AVISO&#x27;, status: 403, motivo: &#x27;insufficient_scope&#x27;, escopo_exigido: escopoExigido, sub: claims.sub, client_id: claims.client_id, jti: claims.jti });
+    json(res, 403, { error: &#x27;insufficient_scope&#x27;, error_description: `Este recurso exige o escopo &quot;${escopoExigido}&quot;.`, escopos_do_token: escopos },
+      { &#x27;WWW-Authenticate&#x27;: `Bearer error=&quot;insufficient_scope&quot;, scope=&quot;${escopoExigido}&quot;` });
+    return null;
+  }
+  audit(req, &#x27;ACESSO_PERMITIDO&#x27;, { escopo: escopoExigido, sub: claims.sub, client_id: claims.client_id, jti: claims.jti });
+  return claims;
+}
+
+function criarServidor() {
+  return http.createServer(auditoria.envolver(&#x27;api&#x27;, async (req, res) =&gt; {
+    const url = new URL(req.url, `http://localhost:${cfg.PORTAS.api}`);
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) {
+        return json(res, 200, { api: &#x27;API Financeira (didática)&#x27;, rotas: { &#x27;GET /saldo&#x27;: &#x27;saldo:read&#x27;, &#x27;GET /transacoes&#x27;: &#x27;transacoes:read&#x27;, &#x27;POST /transferencias&#x27;: &#x27;transacoes:write&#x27;, &#x27;GET /relatorios/resumo&#x27;: &#x27;relatorios:read&#x27; } });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/saldo&#x27;) {
+        const c = autorizar(req, res, &#x27;saldo:read&#x27;); if (!c) return;
+        return json(res, 200, { usuario: c.sub, saldo: contas[c.sub]?.saldo ?? 0, moeda: &#x27;BRL&#x27; });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/transacoes&#x27;) {
+        const c = autorizar(req, res, &#x27;transacoes:read&#x27;); if (!c) return;
+        return json(res, 200, { usuario: c.sub, transacoes: contas[c.sub]?.transacoes ?? [] });
+      }
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/transferencias&#x27;) {
+        const c = autorizar(req, res, &#x27;transacoes:write&#x27;); if (!c) return;
+        const corpo = await lerCorpo(req);
+        audit(req, &#x27;OPERACAO_SENSIVEL&#x27;, { operacao: &#x27;transferencia&#x27;, sub: c.sub, client_id: c.client_id, valor: Number(corpo.valor) || 0, destino: String(corpo.destino || &#x27;&#x27;).slice(0, 40) });
+        return json(res, 201, { status: &#x27;transferência registrada&#x27;, usuario: c.sub, ...corpo });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/relatorios/resumo&#x27;) {
+        const c = autorizar(req, res, &#x27;relatorios:read&#x27;); if (!c) return;
+        const todas = Object.values(contas).flatMap((x) =&gt; x.transacoes);
+        const entradas = todas.filter((t) =&gt; t.valor &gt; 0).reduce((s, t) =&gt; s + t.valor, 0);
+        const saidas = todas.filter((t) =&gt; t.valor &lt; 0).reduce((s, t) =&gt; s + t.valor, 0);
+        return json(res, 200, { solicitante: c.sub, periodo: &#x27;2026-10&#x27;, entradas, saidas: Math.abs(saidas), quantidade: todas.length });
+      }
+      json(res, 404, { error: &#x27;not_found&#x27; });
+    } catch (e) {
+      console.error(&#x27;[api] erro:&#x27;, e);
+      audit(req, &#x27;ERRO_SERVIDOR&#x27;, { nivel: &#x27;ERRO&#x27;, motivo: e.message });
+      json(res, 500, { error: &#x27;server_error&#x27; });
+    }
+  }));
+}
+
+function iniciar(porta = cfg.PORTAS.api) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`API Financeira em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<details class="arq"><summary><code>src/cliente-web.js</code> <small>182 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/cliente-web.js</span><button class="copiar" type="button" aria-label="Copiar src/cliente-web.js">Copiar</button></div><pre><code>// =============================================================
+// cliente-web.js — APLICAÇÃO CLIENTE &quot;App Finanças&quot; (porta 3000)
+// Cliente confidencial: o back-end guarda client_secret, tokens e
+// code_verifier; o navegador recebe apenas um cookie de sessão.
+// Lab 2: propaga o X-Request-Id para provedor e API (rastreio ponta a ponta).
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCookies, html, redirecionar, aleatorio, sha256b64url, esc, pagina } = require(&#x27;./util&#x27;);
+const auditoria = require(&#x27;./auditoria&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const CLIENTE = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;app-financas-web&#x27;);
+const REDIRECT_URI = CLIENTE.redirect_uris[0];
+const ESCOPOS_PEDIDOS = &#x27;saldo:read transacoes:read&#x27;; // menor privilégio: NÃO pede transacoes:write
+const sessoes = new Map();
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[cliente]&#x27;, ...a); };
+
+function obterSessao(req, res) {
+  let sid = lerCookies(req).sid;
+  if (!sid || !sessoes.has(sid)) {
+    sid = aleatorio(16);
+    sessoes.set(sid, { log: [] });
+    res.setHeader(&#x27;Set-Cookie&#x27;, `sid=${sid}; HttpOnly; SameSite=Lax; Path=/`);
+  }
+  return sessoes.get(sid);
+}
+
+async function pedirToken(params, reqId) {
+  const basic = Buffer.from(`${encodeURIComponent(CLIENTE.client_id)}:${encodeURIComponent(CLIENTE.client_secret)}`).toString(&#x27;base64&#x27;);
+  const r = await fetch(`${AUTH}/token`, {
+    method: &#x27;POST&#x27;,
+    headers: { &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27;, Authorization: `Basic ${basic}`, &#x27;X-Request-Id&#x27;: reqId },
+    body: new URLSearchParams(params),
+  });
+  return { status: r.status, corpo: await r.json() };
+}
+
+const resumir = (t) =&gt; (t ? `${t.slice(0, 16)}…` : undefined);
+function guardarTokens(s, corpo) {
+  s.refreshAnterior = s.tokens?.refresh_token;
+  s.tokens = corpo;
+}
+
+function telaInicial(s) {
+  const t = s.tokens;
+  const claims = t ? jwt.decodificar(t.access_token) : null;
+  const restante = claims ? claims.exp - Math.floor(Date.now() / 1000) : 0;
+  const blocoLogin = `&lt;p&gt;Você ainda não autorizou o App Finanças a acessar sua conta.&lt;/p&gt;
+    &lt;a class=&quot;btn&quot; href=&quot;/login&quot;&gt;Entrar com o Provedor OAuth&lt;/a&gt;
+    &lt;a class=&quot;btn perigo&quot; href=&quot;/login-redirect-invalido&quot;&gt;Testar redirect_uri NÃO registrada&lt;/a&gt;`;
+  const blocoLogado = () =&gt; `&lt;h2&gt;Access token — claims (decodificado, sem validar)&lt;/h2&gt;
+    &lt;pre&gt;${esc(JSON.stringify(claims, null, 2))}&lt;/pre&gt;
+    &lt;p&gt;Expira em: &lt;b&gt;${restante &gt; 0 ? `${restante} s` : &#x27;EXPIRADO&#x27;}&lt;/b&gt; · refresh token: &lt;code&gt;${esc(resumir(t.refresh_token))}&lt;/code&gt;&lt;/p&gt;
+    &lt;div&gt;
+      &lt;a class=&quot;btn&quot; href=&quot;/chamar/saldo&quot;&gt;GET /saldo&lt;/a&gt;
+      &lt;a class=&quot;btn&quot; href=&quot;/chamar/transacoes&quot;&gt;GET /transacoes&lt;/a&gt;
+      &lt;form method=&quot;post&quot; action=&quot;/transferir&quot;&gt;&lt;button class=&quot;perigo&quot;&gt;POST /transferencias (escopo não concedido)&lt;/button&gt;&lt;/form&gt;
+    &lt;/div&gt;&lt;div&gt;
+      &lt;form method=&quot;post&quot; action=&quot;/renovar&quot;&gt;&lt;button class=&quot;sec&quot;&gt;Renovar token (refresh)&lt;/button&gt;&lt;/form&gt;
+      ${s.refreshAnterior ? &#x27;&lt;form method=&quot;post&quot; action=&quot;/reusar-refresh&quot;&gt;&lt;button class=&quot;perigo&quot;&gt;Reutilizar refresh token ANTIGO&lt;/button&gt;&lt;/form&gt;&#x27; : &#x27;&#x27;}
+      &lt;form method=&quot;post&quot; action=&quot;/sair&quot;&gt;&lt;button class=&quot;sec&quot;&gt;Sair (revogar)&lt;/button&gt;&lt;/form&gt;
+      &lt;a class=&quot;btn sec&quot; href=&quot;/&quot;&gt;Atualizar&lt;/a&gt;
+    &lt;/div&gt;`;
+  const u = s.ultimo;
+  return pagina(&#x27;App Finanças — cliente OAuth&#x27;, `
+    &lt;p class=&quot;tag&quot;&gt;Aplicação cliente · App Finanças · porta ${cfg.PORTAS.cliente}&lt;/p&gt;
+    &lt;h1&gt;App Finanças&lt;/h1&gt;
+    ${t ? blocoLogado() : blocoLogin}
+    ${u ? `&lt;h2&gt;Última operação: ${esc(u.titulo)} → HTTP ${u.status}&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(u.corpo, null, 2))}&lt;/pre&gt;` : &#x27;&#x27;}
+    ${s.log.length ? `&lt;h2&gt;Linha do tempo do fluxo&lt;/h2&gt;&lt;ol&gt;${s.log.map((l) =&gt; `&lt;li&gt;${esc(l)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ol&gt;` : &#x27;&#x27;}`);
+}
+
+function urlAutorizacao(s, redirectUri) {
+  s.state = aleatorio(16); // anti-CSRF
+  s.verifier = aleatorio(32); // PKCE: segredo que só o back-end do cliente conhece
+  const challenge = sha256b64url(s.verifier);
+  const u = new URL(`${AUTH}/authorize`);
+  u.search = new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: CLIENTE.client_id, redirect_uri: redirectUri, scope: ESCOPOS_PEDIDOS, state: s.state, code_challenge: challenge, code_challenge_method: &#x27;S256&#x27; });
+  s.log = [
+    `Cliente gerou state=${s.state.slice(0, 8)}… e um code_verifier secreto; calculou code_challenge=${challenge.slice(0, 10)}… (SHA-256).`,
+    `Navegador redirecionado para ${AUTH}/authorize pedindo os escopos &quot;${ESCOPOS_PEDIDOS}&quot;.`,
+  ];
+  return u.toString();
+}
+
+async function callback(s, url, res) {
+  const q = url.searchParams;
+  if (q.get(&#x27;error&#x27;)) {
+    s.ultimo = { titulo: &#x27;Autorização não concedida&#x27;, status: 400, corpo: Object.fromEntries(q) };
+    s.log.push(`Provedor devolveu erro: ${q.get(&#x27;error&#x27;)}.`);
+    return redirecionar(res, &#x27;/&#x27;);
+  }
+  if (!s.state || q.get(&#x27;state&#x27;) !== s.state) {
+    auditoria.registrar({ origem: &#x27;cliente&#x27;, tipo: &#x27;CALLBACK_STATE_INVALIDO&#x27;, nivel: &#x27;AVISO&#x27;, req: s.req, motivo: &#x27;state ausente ou diferente (possível CSRF)&#x27; });
+    return html(res, 400, pagina(&#x27;Erro&#x27;, &#x27;&lt;h1&gt;state inválido&lt;/h1&gt;&lt;p class=&quot;erro&quot;&gt;Possível ataque CSRF: esta resposta não corresponde a um pedido iniciado nesta sessão.&lt;/p&gt;&lt;a class=&quot;btn&quot; href=&quot;/&quot;&gt;Voltar&lt;/a&gt;&#x27;));
+  }
+  const code = q.get(&#x27;code&#x27;);
+  s.log.push(`Callback recebeu code=${code.slice(0, 8)}… e o state conferiu.`);
+  const r = await pedirToken({ grant_type: &#x27;authorization_code&#x27;, code, redirect_uri: REDIRECT_URI, code_verifier: s.verifier }, s.reqId);
+  delete s.state;
+  delete s.verifier;
+  if (r.status !== 200) {
+    s.ultimo = { titulo: &#x27;Troca do código falhou&#x27;, ...r };
+    return redirecionar(res, &#x27;/&#x27;);
+  }
+  s.log.push(&#x27;Back-end do cliente trocou code + code_verifier + client_secret por tokens em POST /token (canal servidor-servidor).&#x27;);
+  guardarTokens(s, r.corpo);
+  s.ultimo = { titulo: &#x27;Tokens recebidos (valores abreviados)&#x27;, status: 200, corpo: { ...r.corpo, access_token: resumir(r.corpo.access_token), refresh_token: resumir(r.corpo.refresh_token) } };
+  redirecionar(res, &#x27;/&#x27;);
+}
+
+async function chamarApi(s, metodo, caminho, corpo) {
+  const r = await fetch(`${API}${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${s.tokens.access_token}`, &#x27;Content-Type&#x27;: &#x27;application/json&#x27;, &#x27;X-Request-Id&#x27;: s.reqId },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  s.ultimo = { titulo: `${metodo} ${caminho}`, status: r.status, corpo: await r.json() };
+  s.log.push(`Chamou ${metodo} ${caminho} com Authorization: Bearer → HTTP ${r.status}.`);
+}
+
+async function renovar(s, refresh, titulo) {
+  const r = await pedirToken({ grant_type: &#x27;refresh_token&#x27;, refresh_token: refresh }, s.reqId);
+  if (r.status === 200) {
+    guardarTokens(s, r.corpo);
+    s.ultimo = { titulo, status: 200, corpo: { ...r.corpo, access_token: resumir(r.corpo.access_token), refresh_token: resumir(r.corpo.refresh_token) } };
+    s.log.push(&#x27;Refresh token trocado por um NOVO par de tokens (rotação: o refresh antigo foi invalidado).&#x27;);
+  } else {
+    s.ultimo = { titulo, ...r };
+    s.log.push(`Renovação recusada: ${r.corpo.error_description}`);
+    if (String(r.corpo.error_description).includes(&#x27;REUSO&#x27;)) delete s.tokens; // sessão comprometida
+  }
+}
+
+function criarServidor() {
+  return http.createServer(auditoria.envolver(&#x27;cliente&#x27;, async (req, res) =&gt; {
+    const url = new URL(req.url, `http://localhost:${cfg.PORTAS.cliente}`);
+    const s = obterSessao(req, res);
+    s.reqId = req.idReq; // o mesmo ID segue nas chamadas ao provedor e à API
+    s.req = req;
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) return html(res, 200, telaInicial(s));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/login&#x27;) return redirecionar(res, urlAutorizacao(s, REDIRECT_URI));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/login-redirect-invalido&#x27;) return redirecionar(res, urlAutorizacao(s, &#x27;http://site-malicioso.exemplo/callback&#x27;));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/callback&#x27;) return await callback(s, url, res);
+      if (!s.tokens) return redirecionar(res, &#x27;/&#x27;); // rotas abaixo exigem login
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/chamar/saldo&#x27;) await chamarApi(s, &#x27;GET&#x27;, &#x27;/saldo&#x27;);
+      else if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/chamar/transacoes&#x27;) await chamarApi(s, &#x27;GET&#x27;, &#x27;/transacoes&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/transferir&#x27;) await chamarApi(s, &#x27;POST&#x27;, &#x27;/transferencias&#x27;, { destino: &#x27;Conta 9999-0&#x27;, valor: 100 });
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/renovar&#x27;) await renovar(s, s.tokens.refresh_token, &#x27;Renovação com refresh token atual&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/reusar-refresh&#x27; &amp;&amp; s.refreshAnterior) await renovar(s, s.refreshAnterior, &#x27;Tentativa de REUSO do refresh token antigo&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/sair&#x27;) {
+        const basic = Buffer.from(`${CLIENTE.client_id}:${CLIENTE.client_secret}`).toString(&#x27;base64&#x27;);
+        await fetch(`${AUTH}/revoke`, { method: &#x27;POST&#x27;, headers: { Authorization: `Basic ${basic}`, &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27;, &#x27;X-Request-Id&#x27;: s.reqId }, body: new URLSearchParams({ token: s.tokens.refresh_token }) });
+        delete s.tokens;
+        delete s.refreshAnterior;
+        s.ultimo = { titulo: &#x27;Logout&#x27;, status: 200, corpo: { mensagem: &#x27;Refresh token revogado no provedor e sessão local encerrada.&#x27; } };
+        s.log = [];
+      }
+      redirecionar(res, &#x27;/&#x27;); // padrão Post/Redirect/Get
+    } catch (e) {
+      console.error(&#x27;[cliente] erro:&#x27;, e);
+      html(res, 502, pagina(&#x27;Erro&#x27;, `&lt;h1&gt;Falha ao falar com o provedor/API&lt;/h1&gt;&lt;pre&gt;${esc(e.message)}&lt;/pre&gt;&lt;p&gt;Os três servidores estão rodando? Use &lt;code&gt;npm start&lt;/code&gt;.&lt;/p&gt;`));
+    }
+  }));
+}
+
+function iniciar(porta = cfg.PORTAS.cliente) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`App Finanças em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você explica a diferença entre um 401 por token expirado e um por assinatura inválida.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\api-financeira.js; node --check src\cliente-web.js</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>SyntaxError: missing ) after argument list   (faltou o &#x27;)&#x27; de auditoria.envolver(...))</pre><p><b>Como corrigir:</b> O createServer precisa terminar em &#x27;}));&#x27; — confira o fechamento.</p></div></div></article>
+<article class="cartao passo" id="passo8"><div class="passo-topo"><label><input type="checkbox" class="item" id="i18" data-rotulo="Passo 8"><span class="num">Passo 8</span><span class="tit">Criar simulador, analisador e scripts</span></label><span class="amb">VS Code</span></div>
+<p><code>simular-trafego.js</code> gera uso normal e cinco ataques (força bruta de senha, token adulterado, escalonamento de escopo, reuso de refresh e varredura de <code>client_secret</code>) usando IPs de faixas de documentação. <code>analisar-logs.js</code> verifica a integridade, calcula indicadores, correlaciona por IP e <code>req_id</code> e gera <code>relatorio/relatorio-auditoria.html</code>.</p>
+<details class="arq"><summary><code>src/iniciar.js</code> <small>29 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/iniciar.js</span><button class="copiar" type="button" aria-label="Copiar src/iniciar.js">Copiar</button></div><pre><code>// =============================================================
+// iniciar.js — Sobe os três papéis do OAuth no mesmo processo
+// =============================================================
+const cfg = require(&#x27;./config&#x27;);
+const auth = require(&#x27;./auth-server&#x27;);
+const api = require(&#x27;./api-financeira&#x27;);
+const cliente = require(&#x27;./cliente-web&#x27;);
+
+(async () =&gt; {
+  await auth.iniciar();
+  await api.iniciar();
+  await cliente.iniciar();
+  console.log(`
+==============================================================
+ Laboratório OAuth em execução
+  Servidor de Autorização : ${cfg.EMISSOR}
+  API Financeira (recursos): http://localhost:${cfg.PORTAS.api}
+  App Finanças (cliente)   : http://localhost:${cfg.PORTAS.cliente}   &lt;-- abra no navegador
+  Usuário demo: aluno / senha123   | access token: ${cfg.ACCESS_TOKEN_TTL}s
+  Logs de auditoria        : ${cfg.AUDITORIA.LOG_DIR}  (auditoria.log, alertas.log)
+  Força bruta: ${cfg.AUDITORIA.LIMITE_FALHAS} falhas/${cfg.AUDITORIA.JANELA_S}s =&gt; bloqueio de ${cfg.AUDITORIA.BLOQUEIO_S}s
+  Pressione Ctrl+C para encerrar.
+==============================================================`);
+})().catch((e) =&gt; {
+  console.error(`Falha ao iniciar: ${e.message}`);
+  if (e.code === &#x27;EADDRINUSE&#x27;) console.error(&#x27;Porta ocupada. Feche o outro servidor (Ctrl+C) ou defina AUTH_PORT/API_PORT/CLIENT_PORT.&#x27;);
+  process.exit(1);
+});</code></pre></div></details>
+<details class="arq"><summary><code>src/simular-trafego.js</code> <small>96 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/simular-trafego.js</span><button class="copiar" type="button" aria-label="Copiar src/simular-trafego.js">Copiar</button></div><pre><code>// =============================================================
+// simular-trafego.js — Gera tráfego NORMAL + ATAQUES para análise
+// Uso (com &quot;npm start&quot; rodando em outro terminal): npm run simular
+// IPs simulados via X-Forwarded-For (faixas reservadas para
+// documentação: 10.0.0.0/8 interna, 203.0.113.0/24 e 198.51.100.0/24)
+// =============================================================
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { aleatorio, sha256b64url } = require(&#x27;./util&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const WEB = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;app-financas-web&#x27;);
+const SVC = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;servico-relatorios&#x27;);
+const IP_APP = &#x27;10.0.0.5&#x27;; // servidor do App Finanças (canal back-end)
+const basic = (c) =&gt; `Basic ${Buffer.from(`${c.client_id}:${c.client_secret}`).toString(&#x27;base64&#x27;)}`;
+const cont = { normal: 0, ataque: 0, status: {} };
+
+async function req(url, { ip, metodo = &#x27;GET&#x27;, corpo, headers = {}, ataque = false } = {}) {
+  const r = await fetch(url, { method: metodo, body: corpo, redirect: &#x27;manual&#x27;, headers: { &#x27;X-Forwarded-For&#x27;: ip, &#x27;User-Agent&#x27;: ataque ? &#x27;python-requests/2.31&#x27; : &#x27;Mozilla/5.0 (Lab)&#x27;, ...headers } });
+  cont[ataque ? &#x27;ataque&#x27; : &#x27;normal&#x27;]++;
+  cont.status[r.status] = (cont.status[r.status] || 0) + 1;
+  return r;
+}
+
+async function login(ipUsuario, senha = &#x27;senha123&#x27;, ataque = false, usuario = &#x27;aluno&#x27;) {
+  const verifier = aleatorio(32);
+  const corpo = new URLSearchParams({
+    response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: WEB.redirect_uris[0], scope: &#x27;saldo:read transacoes:read&#x27;,
+    state: aleatorio(8), code_challenge: sha256b64url(verifier), code_challenge_method: &#x27;S256&#x27;, login: usuario, senha, decisao: &#x27;permitir&#x27;,
+  });
+  const r = await req(`${AUTH}/authorize`, { ip: ipUsuario, metodo: &#x27;POST&#x27;, corpo, ataque });
+  const loc = r.headers.get(&#x27;location&#x27;);
+  return { status: r.status, code: loc ? new URL(loc).searchParams.get(&#x27;code&#x27;) : null, verifier };
+}
+
+async function token(params, cliente = WEB, ip = IP_APP, ataque = false) {
+  const r = await req(`${AUTH}/token`, { ip, metodo: &#x27;POST&#x27;, corpo: new URLSearchParams(params), headers: { Authorization: basic(cliente) }, ataque });
+  return { status: r.status, corpo: await r.json() };
+}
+
+const api = (caminho, tk, ip = IP_APP, metodo = &#x27;GET&#x27;, ataque = false) =&gt;
+  req(`${API}${caminho}`, { ip, metodo, headers: { Authorization: `Bearer ${tk}`, &#x27;Content-Type&#x27;: &#x27;application/json&#x27; }, corpo: metodo === &#x27;POST&#x27; ? &#x27;{&quot;destino&quot;:&quot;Conta 9999-0&quot;,&quot;valor&quot;:5000}&#x27; : undefined, ataque });
+
+async function sessaoNormal(ipUsuario) {
+  const l = await login(ipUsuario);
+  if (!l.code) throw new Error(`login normal falhou (HTTP ${l.status}) — o IP ${ipUsuario} está bloqueado?`);
+  const t = await token({ grant_type: &#x27;authorization_code&#x27;, code: l.code, redirect_uri: WEB.redirect_uris[0], code_verifier: l.verifier });
+  for (const c of [&#x27;/saldo&#x27;, &#x27;/transacoes&#x27;, &#x27;/saldo&#x27;]) await api(c, t.corpo.access_token);
+  return t.corpo;
+}
+
+(async () =&gt; {
+  console.log(&#x27;Simulando tráfego... (servidores precisam estar no ar: npm start)\n&#x27;);
+
+  console.log(&#x27;1) Uso normal: 3 usuários fazem login e consultam saldo/extrato&#x27;);
+  const sessoes = [];
+  for (const ip of [&#x27;10.0.0.11&#x27;, &#x27;10.0.0.12&#x27;, &#x27;10.0.0.13&#x27;]) sessoes.push(await sessaoNormal(ip));
+  await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: sessoes[0].refresh_token }); // renovação legítima
+
+  console.log(&#x27;2) Serviço de Relatórios (Client Credentials) gera o relatório do mês&#x27;);
+  const cc = await token({ grant_type: &#x27;client_credentials&#x27;, scope: &#x27;relatorios:read&#x27; }, SVC, &#x27;10.0.0.20&#x27;);
+  await api(&#x27;/relatorios/resumo&#x27;, cc.corpo.access_token, &#x27;10.0.0.20&#x27;);
+
+  console.log(&#x27;3) ATAQUE: força bruta de senha a partir de 203.0.113.66&#x27;);
+  const tentativas = [];
+  const chutes = [[&#x27;admin&#x27;, &#x27;admin&#x27;], [&#x27;root&#x27;, &#x27;123456&#x27;], [&#x27;aluno&#x27;, &#x27;aluno123&#x27;], [&#x27;aluno&#x27;, &#x27;qwerty&#x27;], [&#x27;aluno&#x27;, &#x27;senha1234&#x27;], [&#x27;aluno&#x27;, &#x27;Senha123&#x27;], [&#x27;aluno&#x27;, &#x27;senha123&#x27;], [&#x27;aluno&#x27;, &#x27;senha123&#x27;]];
+  for (const [usuario, senha] of chutes) tentativas.push((await login(&#x27;203.0.113.66&#x27;, senha, true, usuario)).status);
+  console.log(`   status recebidos: ${tentativas.join(&#x27;, &#x27;)}  (429 = IP bloqueado; nem a senha certa passa)`);
+
+  console.log(&#x27;4) ATAQUE: token adulterado (escopo alterado) a partir de 198.51.100.23&#x27;);
+  const [h, , s] = sessoes[1].access_token.split(&#x27;.&#x27;);
+  const falso = Buffer.from(JSON.stringify({ ...jwt.decodificar(sessoes[1].access_token), scope: &#x27;saldo:read transacoes:read transacoes:write&#x27; })).toString(&#x27;base64url&#x27;);
+  for (let i = 0; i &lt; 3; i++) await api(&#x27;/transferencias&#x27;, `${h}.${falso}.${s}`, &#x27;198.51.100.23&#x27;, &#x27;POST&#x27;, true);
+
+  console.log(&#x27;5) ATAQUE: escalonamento — token legítimo tentando transferir sem escopo&#x27;);
+  for (let i = 0; i &lt; 4; i++) await api(&#x27;/transferencias&#x27;, sessoes[2].access_token, &#x27;10.0.0.13&#x27;, &#x27;POST&#x27;, true);
+
+  console.log(&#x27;6) ATAQUE: reuso de refresh token roubado (já trocado no passo 1)&#x27;);
+  await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: sessoes[0].refresh_token }, WEB, &#x27;198.51.100.23&#x27;, true);
+
+  console.log(&#x27;7) ATAQUE: varredura de client_secret a partir de 203.0.113.99&#x27;);
+  for (const seg of [&#x27;secret&#x27;, &#x27;segredo&#x27;, &#x27;123&#x27;, &#x27;admin&#x27;, &#x27;teste&#x27;, &#x27;segredo-app&#x27;]) {
+    await token({ grant_type: &#x27;client_credentials&#x27; }, { client_id: &#x27;app-financas-web&#x27;, client_secret: seg }, &#x27;203.0.113.99&#x27;, true);
+  }
+
+  console.log(&#x27;8) Acessos sem token (robôs varrendo a API)&#x27;);
+  for (const c of [&#x27;/saldo&#x27;, &#x27;/transacoes&#x27;, &#x27;/admin&#x27;, &#x27;/.env&#x27;]) await req(`${API}${c}`, { ip: &#x27;198.51.100.77&#x27;, ataque: true });
+
+  console.log(`\nConcluído: ${cont.normal} requisições normais e ${cont.ataque} de ataque. Status: ${JSON.stringify(cont.status)}`);
+  console.log(&#x27;Próximo passo: npm run analisar&#x27;);
+})().catch((e) =&gt; {
+  console.error(`Erro: ${e.message}. O laboratório está rodando? Execute &quot;npm start&quot; em outro terminal.`);
+  process.exit(1);
+});</code></pre></div></details>
+<details class="arq"><summary><code>src/analisar-logs.js</code> <small>174 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/analisar-logs.js</span><button class="copiar" type="button" aria-label="Copiar src/analisar-logs.js">Copiar</button></div><pre><code>// =============================================================
+// analisar-logs.js — ANÁLISE dos logs de auditoria
+// Verifica a integridade, calcula indicadores (KPIs), correlaciona
+// eventos por IP / usuário / req_id e gera relatório HTML + JSON.
+// Uso:  npm run analisar
+//       npm run analisar -- --decifrar        (mostra logins digitados errado)
+//       npm run analisar -- --req=&lt;req_id&gt;    (rastreia uma requisição ponta a ponta)
+//       npm run analisar -- --dir=&lt;pasta&gt;     (outra pasta de logs)
+// Código de saída: 0 = ok | 2 = integridade violada
+// =============================================================
+const fs = require(&#x27;node:fs&#x27;);
+const path = require(&#x27;node:path&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const auditoria = require(&#x27;./auditoria&#x27;);
+
+const contar = (lista, chave) =&gt; lista.reduce((m, x) =&gt; { const k = chave(x); if (k !== undefined) m[k] = (m[k] || 0) + 1; return m; }, {});
+const top = (obj, n = 5) =&gt; Object.entries(obj).sort((a, b) =&gt; b[1] - a[1]).slice(0, n);
+const pct = (a, b) =&gt; (b ? Math.round((a / b) * 1000) / 10 : 0);
+function p95(valores) {
+  if (!valores.length) return 0;
+  const v = [...valores].sort((a, b) =&gt; a - b);
+  return v[Math.min(v.length - 1, Math.ceil(v.length * 0.95) - 1)];
+}
+
+function analisar(dir = cfg.AUDITORIA.LOG_DIR) {
+  const integridade = auditoria.verificarIntegridade(dir);
+  const ev = auditoria.lerEventos(dir);
+  const http = ev.filter((e) =&gt; e.tipo === &#x27;HTTP_REQUISICAO&#x27;);
+  const seguranca = ev.filter((e) =&gt; e.tipo !== &#x27;HTTP_REQUISICAO&#x27;);
+  const criticos = ev.filter((e) =&gt; e.nivel === &#x27;CRITICO&#x27;);
+  const loginsOk = ev.filter((e) =&gt; e.tipo === &#x27;LOGIN_SUCESSO&#x27;).length;
+  const loginsFalha = ev.filter((e) =&gt; e.tipo === &#x27;LOGIN_FALHA&#x27;).length;
+  const apiHttp = http.filter((e) =&gt; e.origem === &#x27;api&#x27;);
+  const errosHttp = http.filter((e) =&gt; e.status &gt;= 400).length;
+
+  const porOrigem = {};
+  for (const o of [&#x27;auth&#x27;, &#x27;api&#x27;, &#x27;cliente&#x27;]) {
+    const l = http.filter((e) =&gt; e.origem === o);
+    porOrigem[o] = { total: l.length, erros_4xx: l.filter((e) =&gt; e.status &gt;= 400 &amp;&amp; e.status &lt; 500).length, erros_5xx: l.filter((e) =&gt; e.status &gt;= 500).length, p95_ms: p95(l.map((e) =&gt; e.duracao_ms)) };
+  }
+
+  // Correlação por IP: eventos de segurança com nível AVISO/CRITICO (exclui log de acesso)
+  const suspeitos = seguranca.filter((e) =&gt; [&#x27;AVISO&#x27;, &#x27;CRITICO&#x27;].includes(e.nivel) &amp;&amp; e.ip);
+  const suspeitosPorIp = top(contar(suspeitos, (e) =&gt; e.ip), 8).map(([ip, n]) =&gt; ({
+    ip, eventos: n, tipos: contar(suspeitos.filter((e) =&gt; e.ip === ip), (e) =&gt; e.tipo),
+    bloqueado: ev.some((e) =&gt; e.tipo === &#x27;ALERTA_FORCA_BRUTA&#x27; &amp;&amp; e.ip === ip),
+  }));
+
+  // Linha do tempo por minuto
+  const linhaDoTempo = Object.entries(ev.reduce((m, e) =&gt; {
+    const k = e.ts.slice(0, 16);
+    m[k] = m[k] || { total: 0, avisos: 0, criticos: 0 };
+    m[k].total++;
+    if (e.nivel === &#x27;AVISO&#x27;) m[k].avisos++;
+    if (e.nivel === &#x27;CRITICO&#x27;) m[k].criticos++;
+    return m;
+  }, {})).map(([minuto, v]) =&gt; ({ minuto, ...v }));
+
+  const taxaFalhaLogin = pct(loginsFalha, loginsOk + loginsFalha);
+  const taxaErroHttp = pct(errosHttp, http.length);
+  const p95Api = p95(apiHttp.map((e) =&gt; e.duracao_ms));
+  const ipsBloqueados = [...new Set(ev.filter((e) =&gt; e.tipo === &#x27;ALERTA_FORCA_BRUTA&#x27;).map((e) =&gt; e.ip))];
+  const kpis = [
+    { nome: &#x27;Integridade dos logs&#x27;, valor: integridade.ok ? &#x27;íntegros&#x27; : `${integridade.erros.length} violação(ões)`, meta: &#x27;íntegros&#x27;, ok: integridade.ok },
+    { nome: &#x27;Alertas críticos&#x27;, valor: criticos.length, meta: &#x27;0&#x27;, ok: criticos.length === 0 },
+    { nome: &#x27;IPs bloqueados (força bruta)&#x27;, valor: ipsBloqueados.length, meta: &#x27;0&#x27;, ok: ipsBloqueados.length === 0 },
+    { nome: &#x27;Taxa de falha de login&#x27;, valor: `${taxaFalhaLogin}%`, meta: &#x27;&lt; 20%&#x27;, ok: taxaFalhaLogin &lt; 20 },
+    { nome: &#x27;Taxa de erro HTTP (4xx+5xx)&#x27;, valor: `${taxaErroHttp}%`, meta: &#x27;&lt; 10%&#x27;, ok: taxaErroHttp &lt; 10 },
+    { nome: &#x27;Latência p95 da API&#x27;, valor: `${p95Api} ms`, meta: &#x27;&lt; 200 ms&#x27;, ok: p95Api &lt; 200 },
+  ];
+
+  const recomendacoes = [];
+  if (!integridade.ok) recomendacoes.push(&#x27;Logs adulterados ou corrompidos: preservar cópia, abrir incidente e investigar acesso ao servidor de logs.&#x27;);
+  for (const s of suspeitosPorIp.filter((x) =&gt; x.bloqueado)) recomendacoes.push(`IP ${s.ip}: força bruta (${s.eventos} eventos suspeitos) — manter bloqueio, avaliar bloqueio permanente no firewall/WAF.`);
+  if (ev.some((e) =&gt; e.tipo === &#x27;ALERTA_TOKEN_ADULTERADO&#x27;)) recomendacoes.push(&#x27;Tokens com assinatura inválida: alguém está forjando tokens — verificar exposição do segredo de assinatura e migrar para chaves assimétricas (RS256/ES256).&#x27;);
+  if (ev.some((e) =&gt; e.tipo === &#x27;REFRESH_REUSO&#x27;)) recomendacoes.push(&#x27;Reuso de refresh token: sessão possivelmente roubada — avisar o usuário, revisar dispositivos e forçar novo login.&#x27;);
+  const escal = ev.filter((e) =&gt; e.tipo === &#x27;ACESSO_NEGADO&#x27; &amp;&amp; e.status === 403);
+  if (escal.length &gt;= 3) recomendacoes.push(`${escal.length} tentativas de acesso fora do escopo (403): revisar o cliente ${[...new Set(escal.map((e) =&gt; e.client_id))].join(&#x27;, &#x27;)} e criar alerta para picos de 403.`);
+  if (!recomendacoes.length) recomendacoes.push(&#x27;Nenhuma anomalia relevante no período. Manter revisão periódica.&#x27;);
+
+  return {
+    gerado_em: new Date().toISOString(), pasta: dir,
+    periodo: { inicio: ev[0]?.ts, fim: ev[ev.length - 1]?.ts },
+    integridade, total_eventos: ev.length,
+    por_tipo: contar(ev, (e) =&gt; e.tipo), por_nivel: contar(ev, (e) =&gt; e.nivel),
+    http: { total: http.length, taxa_erro_pct: taxaErroHttp, por_origem: porOrigem, por_status: contar(http, (e) =&gt; e.status) },
+    autenticacao: { logins_sucesso: loginsOk, logins_falha: loginsFalha, taxa_falha_pct: taxaFalhaLogin, falhas_cliente: ev.filter((e) =&gt; e.tipo === &#x27;CLIENTE_AUTH_FALHA&#x27;).length },
+    suspeitos_por_ip: suspeitosPorIp, ips_bloqueados: ipsBloqueados,
+    alertas: criticos.map((e) =&gt; ({ ts: e.ts, tipo: e.tipo, ip: e.ip, req_id: e.req_id, detalhe: e.acao || e.motivo || &#x27;&#x27; })),
+    negados_por_motivo: contar(ev.filter((e) =&gt; e.tipo === &#x27;ACESSO_NEGADO&#x27;), (e) =&gt; `${e.status} ${e.motivo}`),
+    linha_do_tempo: linhaDoTempo, kpis, recomendacoes,
+  };
+}
+
+// ---------------------------------------------------------------- relatório HTML
+function htmlRelatorio(r) {
+  const esc = (s) =&gt; String(s ?? &#x27;&#x27;).replace(/[&amp;&lt;&gt;&quot;]/g, (c) =&gt; ({ &#x27;&amp;&#x27;: &#x27;&amp;amp;&#x27;, &#x27;&lt;&#x27;: &#x27;&amp;lt;&#x27;, &#x27;&gt;&#x27;: &#x27;&amp;gt;&#x27;, &#x27;&quot;&#x27;: &#x27;&amp;quot;&#x27; }[c]));
+  const maxIp = Math.max(1, ...r.suspeitos_por_ip.map((s) =&gt; s.eventos));
+  const maxMin = Math.max(1, ...r.linha_do_tempo.map((m) =&gt; m.total));
+  return `&lt;!doctype html&gt;&lt;html lang=&quot;pt-BR&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
+&lt;title&gt;Relatório de auditoria&lt;/title&gt;&lt;style&gt;
+body{margin:0;background:#0e1116;color:#e6edf3;font:15px/1.5 &quot;Segoe UI&quot;,system-ui,sans-serif}main{max-width:1000px;margin:0 auto;padding:20px 16px 48px}
+h1{margin:.2rem 0}h2{font-size:1.1rem;margin:1.6rem 0 .6rem}.sub{color:#9aa6b2}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.kpi{background:#161b22;border:1px solid #2a313c;border-radius:10px;padding:12px}
+.kpi b{display:block;font-size:1.4rem;font-variant-numeric:tabular-nums}.kpi small{color:#9aa6b2}.kpi.ok{border-left:4px solid #3fb68b}.kpi.ruim{border-left:4px solid #f85149}
+table{width:100%;border-collapse:collapse;font-size:.88rem}th,td{text-align:left;padding:.4rem;border-bottom:1px solid #2a313c;vertical-align:top}th{color:#9aa6b2}
+.barra{height:12px;background:#f0883e;border-radius:3px}.barra.c{background:#f85149}.tl{display:flex;align-items:flex-end;gap:3px;height:120px;border-bottom:1px solid #2a313c}
+.tl div{flex:1;max-width:48px;background:#3fb68b;min-width:4px;border-radius:2px 2px 0 0}.tl div.c{background:#f85149}.tag{display:inline-block;background:#222a35;border-radius:5px;padding:0 .4rem;margin:1px;font-size:.8rem}
+.box{background:#161b22;border:1px solid #2a313c;border-radius:10px;padding:12px 14px}.erro{color:#ff7b72}.okc{color:#3fb68b}code{font-family:Consolas,monospace}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;main&gt;
+&lt;p class=&quot;sub&quot;&gt;Laboratório 2 · Auditoria e logs da API Financeira&lt;/p&gt;&lt;h1&gt;Relatório de auditoria&lt;/h1&gt;
+&lt;p class=&quot;sub&quot;&gt;Período: ${esc(r.periodo.inicio)} → ${esc(r.periodo.fim)} · ${r.total_eventos} eventos · gerado em ${esc(r.gerado_em)}&lt;/p&gt;
+&lt;h2&gt;Indicadores&lt;/h2&gt;&lt;div class=&quot;kpis&quot;&gt;${r.kpis.map((k) =&gt; `&lt;div class=&quot;kpi ${k.ok ? &#x27;ok&#x27; : &#x27;ruim&#x27;}&quot;&gt;&lt;small&gt;${esc(k.nome)}&lt;/small&gt;&lt;b&gt;${esc(k.valor)}&lt;/b&gt;&lt;small&gt;meta: ${esc(k.meta)} · ${k.ok ? &#x27;OK&#x27; : &#x27;ATENÇÃO&#x27;}&lt;/small&gt;&lt;/div&gt;`).join(&#x27;&#x27;)}&lt;/div&gt;
+&lt;h2&gt;Integridade da cadeia de logs&lt;/h2&gt;&lt;div class=&quot;box&quot;&gt;${r.integridade.ok ? `&lt;span class=&quot;okc&quot;&gt;✔ ${r.integridade.total} registros verificados em ${r.integridade.arquivos.length} arquivo(s); nenhum alterado.&lt;/span&gt;` : `&lt;span class=&quot;erro&quot;&gt;✘ ${r.integridade.erros.length} problema(s):&lt;/span&gt;&lt;ul&gt;${r.integridade.erros.slice(0, 20).map((e) =&gt; `&lt;li class=&quot;erro&quot;&gt;${esc(e.arquivo)} linha ${e.linha}: ${esc(e.motivo)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ul&gt;`}
+${r.integridade.ancora &amp;&amp; !r.integridade.ancora.completa ? &#x27;&lt;p class=&quot;sub&quot;&gt;Início da cadeia em arquivo posterior ao GENESIS: arquivos mais antigos foram expurgados pela política de retenção.&lt;/p&gt;&#x27; : &#x27;&#x27;}&lt;/div&gt;
+&lt;h2&gt;Alertas críticos (${r.alertas.length})&lt;/h2&gt;&lt;table&gt;&lt;tr&gt;&lt;th&gt;Horário&lt;/th&gt;&lt;th&gt;Tipo&lt;/th&gt;&lt;th&gt;IP&lt;/th&gt;&lt;th&gt;Detalhe&lt;/th&gt;&lt;th&gt;req_id&lt;/th&gt;&lt;/tr&gt;
+${r.alertas.map((a) =&gt; `&lt;tr&gt;&lt;td&gt;${esc(a.ts)}&lt;/td&gt;&lt;td&gt;${esc(a.tipo)}&lt;/td&gt;&lt;td&gt;${esc(a.ip)}&lt;/td&gt;&lt;td&gt;${esc(a.detalhe)}&lt;/td&gt;&lt;td&gt;&lt;code&gt;${esc(String(a.req_id || &#x27;&#x27;).slice(0, 8))}&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;`).join(&#x27;&#x27;) || &#x27;&lt;tr&gt;&lt;td colspan=&quot;5&quot;&gt;Nenhum&lt;/td&gt;&lt;/tr&gt;&#x27;}&lt;/table&gt;
+&lt;h2&gt;IPs com mais eventos suspeitos&lt;/h2&gt;&lt;table&gt;&lt;tr&gt;&lt;th&gt;IP&lt;/th&gt;&lt;th style=&quot;width:35%&quot;&gt;Eventos&lt;/th&gt;&lt;th&gt;Tipos&lt;/th&gt;&lt;/tr&gt;
+${r.suspeitos_por_ip.map((s) =&gt; `&lt;tr&gt;&lt;td&gt;${esc(s.ip)}${s.bloqueado ? &#x27; &lt;span class=&quot;tag&quot;&gt;bloqueado&lt;/span&gt;&#x27; : &#x27;&#x27;}&lt;/td&gt;&lt;td&gt;&lt;div class=&quot;barra ${s.bloqueado ? &#x27;c&#x27; : &#x27;&#x27;}&quot; style=&quot;width:${(s.eventos / maxIp) * 100}%&quot;&gt;&lt;/div&gt;${s.eventos}&lt;/td&gt;&lt;td&gt;${Object.entries(s.tipos).map(([t, n]) =&gt; `&lt;span class=&quot;tag&quot;&gt;${esc(t)} ×${n}&lt;/span&gt;`).join(&#x27;&#x27;)}&lt;/td&gt;&lt;/tr&gt;`).join(&#x27;&#x27;)}&lt;/table&gt;
+&lt;h2&gt;Eventos por minuto&lt;/h2&gt;&lt;div class=&quot;tl&quot;&gt;${r.linha_do_tempo.map((m) =&gt; `&lt;div class=&quot;${m.criticos ? &#x27;c&#x27; : &#x27;&#x27;}&quot; style=&quot;height:${(m.total / maxMin) * 100}%&quot; title=&quot;${esc(m.minuto)}: ${m.total} eventos, ${m.criticos} críticos&quot;&gt;&lt;/div&gt;`).join(&#x27;&#x27;)}&lt;/div&gt;
+&lt;p class=&quot;sub&quot;&gt;Barras vermelhas = minutos com eventos críticos.&lt;/p&gt;
+&lt;h2&gt;Acessos negados por motivo&lt;/h2&gt;&lt;table&gt;${Object.entries(r.negados_por_motivo).map(([k, v]) =&gt; `&lt;tr&gt;&lt;td&gt;${esc(k)}&lt;/td&gt;&lt;td&gt;${v}&lt;/td&gt;&lt;/tr&gt;`).join(&#x27;&#x27;) || &#x27;&lt;tr&gt;&lt;td&gt;Nenhum&lt;/td&gt;&lt;/tr&gt;&#x27;}&lt;/table&gt;
+&lt;h2&gt;Tráfego HTTP por serviço&lt;/h2&gt;&lt;table&gt;&lt;tr&gt;&lt;th&gt;Serviço&lt;/th&gt;&lt;th&gt;Requisições&lt;/th&gt;&lt;th&gt;4xx&lt;/th&gt;&lt;th&gt;5xx&lt;/th&gt;&lt;th&gt;p95&lt;/th&gt;&lt;/tr&gt;
+${Object.entries(r.http.por_origem).map(([o, v]) =&gt; `&lt;tr&gt;&lt;td&gt;${o}&lt;/td&gt;&lt;td&gt;${v.total}&lt;/td&gt;&lt;td&gt;${v.erros_4xx}&lt;/td&gt;&lt;td&gt;${v.erros_5xx}&lt;/td&gt;&lt;td&gt;${v.p95_ms} ms&lt;/td&gt;&lt;/tr&gt;`).join(&#x27;&#x27;)}&lt;/table&gt;
+&lt;h2&gt;Recomendações&lt;/h2&gt;&lt;ul&gt;${r.recomendacoes.map((x) =&gt; `&lt;li&gt;${esc(x)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ul&gt;
+&lt;/main&gt;&lt;/body&gt;&lt;/html&gt;`;
+}
+
+// ---------------------------------------------------------------- CLI
+if (require.main === module) {
+  const args = Object.fromEntries(process.argv.slice(2).map((a) =&gt; { const [k, v] = a.replace(/^--/, &#x27;&#x27;).split(&#x27;=&#x27;); return [k, v ?? true]; }));
+  const dir = args.dir || cfg.AUDITORIA.LOG_DIR;
+  if (!auditoria.listarArquivos(dir).length) {
+    console.error(`Nenhum log em ${dir}. Rode &quot;npm start&quot; e gere tráfego (&quot;npm run simular&quot;) antes.`);
+    process.exit(1);
+  }
+  if (args.req) {
+    const lista = auditoria.lerEventos(dir).filter((e) =&gt; e.req_id === args.req);
+    console.log(`Rastreio do req_id ${args.req} (${lista.length} eventos):`);
+    for (const e of lista) console.log(`  ${e.ts} [${e.origem}] ${e.tipo} ${e.metodo || &#x27;&#x27;} ${e.rota || &#x27;&#x27;} ${e.status || &#x27;&#x27;} ${e.motivo || &#x27;&#x27;}`);
+    process.exit(0);
+  }
+  const r = analisar(dir);
+  const L = (s = &#x27;&#x27;) =&gt; console.log(s);
+  L(&#x27;==================== ANÁLISE DOS LOGS DE AUDITORIA ====================&#x27;);
+  L(`Pasta: ${dir}`);
+  L(`Período: ${r.periodo.inicio} -&gt; ${r.periodo.fim} | ${r.total_eventos} eventos`);
+  L(`Integridade: ${r.integridade.ok ? &#x27;OK&#x27; : &#x27;VIOLADA&#x27;} (${r.integridade.total} registros, ${r.integridade.arquivos.length} arquivo(s))`);
+  for (const e of r.integridade.erros.slice(0, 10)) L(`   ! ${e.arquivo} linha ${e.linha}: ${e.motivo}`);
+  L(&#x27;\nIndicadores:&#x27;);
+  for (const k of r.kpis) L(`  [${k.ok ? &#x27;OK&#x27; : &#x27;ATENCAO&#x27;}] ${k.nome}: ${k.valor} (meta ${k.meta})`);
+  L(`\nAlertas críticos: ${r.alertas.length}`);
+  for (const a of r.alertas) L(`  ${a.ts} ${a.tipo} ip=${a.ip} ${a.detalhe}`);
+  L(&#x27;\nIPs com mais eventos suspeitos:&#x27;);
+  for (const s of r.suspeitos_por_ip) L(`  ${s.ip.padEnd(16)} ${String(s.eventos).padStart(3)} ${s.bloqueado ? &#x27;[BLOQUEADO] &#x27; : &#x27;&#x27;}${Object.keys(s.tipos).join(&#x27;, &#x27;)}`);
+  if (args.decifrar) {
+    L(&#x27;\nLogins digitados nas falhas (decifrados — acesso restrito à equipe de segurança):&#x27;);
+    for (const e of auditoria.lerEventos(dir).filter((x) =&gt; x.tipo === &#x27;LOGIN_FALHA&#x27;)) {
+      let login; try { login = auditoria.decifrar(e.login_cifrado); } catch { login = &#x27;(chave incorreta)&#x27;; }
+      L(`  ${e.ts} ip=${e.ip} login=&quot;${login}&quot;`);
+    }
+  }
+  L(&#x27;\nRecomendações:&#x27;);
+  for (const x of r.recomendacoes) L(`  - ${x}`);
+  const pasta = path.join(__dirname, &#x27;..&#x27;, &#x27;relatorio&#x27;);
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.writeFileSync(path.join(pasta, &#x27;indicadores.json&#x27;), JSON.stringify(r, null, 2));
+  fs.writeFileSync(path.join(pasta, &#x27;relatorio-auditoria.html&#x27;), htmlRelatorio(r));
+  L(`\nRelatório: ${path.join(pasta, &#x27;relatorio-auditoria.html&#x27;)}`);
+  process.exit(r.integridade.ok ? 0 : 2);
+}
+
+module.exports = { analisar, htmlRelatorio };</code></pre></div></details>
+<details class="arq"><summary><code>package.json</code> <small>20 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>package.json</span><button class="copiar" type="button" aria-label="Copiar package.json">Copiar</button></div><pre><code>{
+  &quot;name&quot;: &quot;atividade-oauth-api&quot;,
+  &quot;version&quot;: &quot;2.0.0&quot;,
+  &quot;description&quot;: &quot;Laboratório OAuth 2.0 + Auditoria e Logs — API Financeira (Programação Back-End, aulas 1 e 3)&quot;,
+  &quot;main&quot;: &quot;src/iniciar.js&quot;,
+  &quot;private&quot;: true,
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;node src/iniciar.js&quot;,
+    &quot;test&quot;: &quot;node testes/teste-fluxo.js &amp;&amp; node testes/teste-auditoria.js&quot;,
+    &quot;test:auditoria&quot;: &quot;node testes/teste-auditoria.js&quot;,
+    &quot;cc&quot;: &quot;node src/client-credentials.js&quot;,
+    &quot;simular&quot;: &quot;node src/simular-trafego.js&quot;,
+    &quot;analisar&quot;: &quot;node src/analisar-logs.js&quot;
+  },
+  &quot;engines&quot;: {
+    &quot;node&quot;: &quot;&gt;=20&quot;
+  },
+  &quot;license&quot;: &quot;UNLICENSED&quot;
+}</code></pre></div></details>
+<details class="arq"><summary><code>README.md</code> <small>24 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>README.md</span><button class="copiar" type="button" aria-label="Copiar README.md">Copiar</button></div><pre><code># Laboratório OAuth 2.0 + Auditoria e Logs — API Financeira
+
+Programação Back-End (2ª série, 4º bimestre, semana 25): **aula 1** (OAuth) e **aula 3** (auditoria e logs). Sem dependências externas: apenas Node.js 20+.
+
+| Papel | Arquivo | Porta |
+|---|---|---|
+| Servidor de Autorização | `src/auth-server.js` | 4000 |
+| Servidor de Recursos (API) | `src/api-financeira.js` | 5000 |
+| Cliente (App Finanças) | `src/cliente-web.js` | 3000 |
+| Auditoria (logs, alertas, integridade) | `src/auditoria.js` | — |
+
+```powershell
+npm test               # 25 testes OAuth + 27 testes de auditoria
+npm start              # sobe os três servidores -&gt; http://localhost:3000 (aluno / senha123)
+npm run simular        # (outro terminal) tráfego normal + ataques
+npm run analisar       # KPIs, alertas, integridade -&gt; relatorio\relatorio-auditoria.html
+node src\analisar-logs.js --decifrar        # logins digitados nas falhas (restrito)
+node src\analisar-logs.js --req=&lt;req_id&gt;    # rastreia uma requisição ponta a ponta
+$env:LOG_MAX_BYTES=8000; npm start          # força rotação rápida dos logs
+```
+
+Logs em `logs/` (fora do Git): `auditoria.log` (+ rotacionados) e `alertas.log`.
+Planos do grupo: `docs/plano-oauth.md` (aula 1) e `docs/plano-auditoria.md` (aula 3).</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> <code>package.json</code> com os scripts start, test, simular e analisar.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>npm run    (lista: start, test, test:auditoria, cc, simular, analisar)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>npm ERR! Missing script: &quot;simular&quot;</pre><p><b>Como corrigir:</b> Substitua o package.json inteiro pelo desta seção.</p></div></div></article>
+<article class="cartao passo" id="passo9"><div class="passo-topo"><label><input type="checkbox" class="item" id="i19" data-rotulo="Passo 9"><span class="num">Passo 9</span><span class="tit">Rodar os testes automáticos</span></label><span class="amb">VS Code + PowerShell</span></div>
+<p><code>teste-auditoria.js</code> verifica 27 regras (correlação, eventos, alertas, bloqueio, ausência de segredos, integridade, rotação e análise) em uma pasta temporária. <code>teste-fluxo.js</code> recebeu só uma linha para também usar pasta temporária.</p>
+<div class="codigo"><div class="codigo-topo"><span>VS Code + PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar VS Code + PowerShell — comandos">Copiar</button></div><pre><code>npm test</code></pre></div>
+<details class="arq"><summary><code>testes/teste-auditoria.js</code> <small>141 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>testes/teste-auditoria.js</span><button class="copiar" type="button" aria-label="Copiar testes/teste-auditoria.js">Copiar</button></div><pre><code>// =============================================================
+// teste-auditoria.js — Testes automáticos do Laboratório 2
+// (npm run test:auditoria) — logs, alertas, integridade, rotação
+// =============================================================
+const fs = require(&#x27;node:fs&#x27;);
+const os = require(&#x27;node:os&#x27;);
+const path = require(&#x27;node:path&#x27;);
+
+const PASTA = fs.mkdtempSync(path.join(os.tmpdir(), &#x27;auditoria-teste-&#x27;));
+Object.assign(process.env, {
+  AUTH_PORT: &#x27;24000&#x27;, API_PORT: &#x27;25000&#x27;, CLIENT_PORT: &#x27;23000&#x27;, OAUTH_QUIET: &#x27;1&#x27;,
+  LOG_DIR: PASTA, LOG_MAX_BYTES: &#x27;20000&#x27;, LOG_RETENCAO_ARQUIVOS: &#x27;50&#x27;, LIMITE_FALHAS: &#x27;5&#x27;, JANELA_S: &#x27;60&#x27;, BLOQUEIO_S: &#x27;300&#x27;,
+});
+
+const cfg = require(&#x27;../src/config&#x27;);
+const jwt = require(&#x27;../src/jwt&#x27;);
+const auditoria = require(&#x27;../src/auditoria&#x27;);
+const { analisar } = require(&#x27;../src/analisar-logs&#x27;);
+const { sha256b64url, aleatorio } = require(&#x27;../src/util&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const WEB = cfg.CLIENTES[0];
+const basic = (c) =&gt; `Basic ${Buffer.from(`${c.client_id}:${c.client_secret}`).toString(&#x27;base64&#x27;)}`;
+const eventos = (tipo) =&gt; auditoria.memoria.filter((e) =&gt; e.tipo === tipo);
+
+let ok = 0;
+let falhas = 0;
+function verificar(descricao, condicao, detalhe = &#x27;&#x27;) {
+  if (condicao) { ok++; console.log(`  [OK]    ${descricao}`); }
+  else { falhas++; console.log(`  [FALHA] ${descricao}${detalhe ? ` -&gt; ${detalhe}` : &#x27;&#x27;}`); }
+}
+
+async function login(ip, senha = &#x27;senha123&#x27;) {
+  const v = aleatorio(32);
+  const r = await fetch(`${AUTH}/authorize`, {
+    method: &#x27;POST&#x27;, redirect: &#x27;manual&#x27;, headers: { &#x27;X-Forwarded-For&#x27;: ip },
+    body: new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: WEB.redirect_uris[0], scope: &#x27;saldo:read transacoes:read&#x27;, state: &#x27;st&#x27;, code_challenge: sha256b64url(v), code_challenge_method: &#x27;S256&#x27;, login: &#x27;aluno&#x27;, senha, decisao: &#x27;permitir&#x27; }),
+  });
+  const loc = r.headers.get(&#x27;location&#x27;);
+  return { status: r.status, code: loc ? new URL(loc).searchParams.get(&#x27;code&#x27;) : null, v };
+}
+
+async function token(params, ip = &#x27;10.0.0.5&#x27;) {
+  const r = await fetch(`${AUTH}/token`, { method: &#x27;POST&#x27;, headers: { Authorization: basic(WEB), &#x27;X-Forwarded-For&#x27;: ip }, body: new URLSearchParams(params) });
+  return { status: r.status, corpo: await r.json() };
+}
+
+(async () =&gt; {
+  await require(&#x27;../src/auth-server&#x27;).iniciar();
+  await require(&#x27;../src/api-financeira&#x27;).iniciar();
+  await require(&#x27;../src/cliente-web&#x27;).iniciar();
+  console.log(`\nTestes do Laboratório 2 — auditoria e logs (pasta ${PASTA})\n`);
+
+  console.log(&#x27;1. Log de acesso e correlação&#x27;);
+  const r0 = await fetch(`${AUTH}/.well-known/oauth-authorization-server`, { headers: { &#x27;X-Request-Id&#x27;: &#x27;teste-correlacao-001&#x27; } });
+  verificar(&#x27;X-Request-Id válido é devolvido na resposta&#x27;, r0.headers.get(&#x27;x-request-id&#x27;) === &#x27;teste-correlacao-001&#x27;);
+  verificar(&#x27;HTTP_REQUISICAO registrada com o mesmo req_id&#x27;, eventos(&#x27;HTTP_REQUISICAO&#x27;).some((e) =&gt; e.req_id === &#x27;teste-correlacao-001&#x27; &amp;&amp; e.status === 200));
+  const r1 = await fetch(`${AUTH}/`, { headers: { &#x27;X-Request-Id&#x27;: &#x27;x&quot;}{inj&#x27; } });
+  verificar(&#x27;X-Request-Id inválido é substituído (anti-injeção)&#x27;, /^[0-9a-f-]{36}$/.test(r1.headers.get(&#x27;x-request-id&#x27;)));
+
+  console.log(&#x27;2. Eventos de autenticação&#x27;);
+  const falha = await login(&#x27;10.1.1.1&#x27;, &#x27;senha-errada-xyz&#x27;);
+  const ev = eventos(&#x27;LOGIN_FALHA&#x27;).at(-1);
+  verificar(&#x27;login inválido -&gt; LOGIN_FALHA (AVISO) com IP&#x27;, falha.status === 401 &amp;&amp; ev?.nivel === &#x27;AVISO&#x27; &amp;&amp; ev?.ip === &#x27;10.1.1.1&#x27;);
+  verificar(&#x27;login digitado é gravado cifrado e pode ser decifrado com a chave&#x27;, ev?.login_cifrado?.startsWith(&#x27;gcm:&#x27;) &amp;&amp; auditoria.decifrar(ev.login_cifrado) === &#x27;aluno&#x27;);
+  const l = await login(&#x27;10.1.1.2&#x27;);
+  verificar(&#x27;login válido -&gt; LOGIN_SUCESSO&#x27;, l.code &amp;&amp; eventos(&#x27;LOGIN_SUCESSO&#x27;).at(-1)?.ip === &#x27;10.1.1.2&#x27;);
+  const t = await token({ grant_type: &#x27;authorization_code&#x27;, code: l.code, redirect_uri: WEB.redirect_uris[0], code_verifier: l.v });
+  const jti = jwt.decodificar(t.corpo.access_token).jti;
+  verificar(&#x27;TOKEN_EMITIDO traz o jti do token&#x27;, eventos(&#x27;TOKEN_EMITIDO&#x27;).some((e) =&gt; e.jti === jti));
+
+  console.log(&#x27;3. Eventos da API&#x27;);
+  await fetch(`${API}/transacoes`, { headers: { Authorization: `Bearer ${t.corpo.access_token}` } });
+  verificar(&#x27;ACESSO_PERMITIDO correlacionável ao token pelo jti&#x27;, eventos(&#x27;ACESSO_PERMITIDO&#x27;).some((e) =&gt; e.jti === jti &amp;&amp; e.escopo === &#x27;transacoes:read&#x27;));
+  await fetch(`${API}/transferencias`, { method: &#x27;POST&#x27;, headers: { Authorization: `Bearer ${t.corpo.access_token}` } });
+  verificar(&#x27;403 -&gt; ACESSO_NEGADO com escopo exigido&#x27;, eventos(&#x27;ACESSO_NEGADO&#x27;).some((e) =&gt; e.status === 403 &amp;&amp; e.escopo_exigido === &#x27;transacoes:write&#x27;));
+  const [h, , s] = t.corpo.access_token.split(&#x27;.&#x27;);
+  const falso = Buffer.from(JSON.stringify({ ...jwt.decodificar(t.corpo.access_token), scope: &#x27;transacoes:write&#x27; })).toString(&#x27;base64url&#x27;);
+  await fetch(`${API}/transferencias`, { method: &#x27;POST&#x27;, headers: { Authorization: `Bearer ${h}.${falso}.${s}`, &#x27;X-Forwarded-For&#x27;: &#x27;198.51.100.23&#x27; } });
+  verificar(&#x27;token adulterado -&gt; ALERTA_TOKEN_ADULTERADO (CRITICO)&#x27;, eventos(&#x27;ALERTA_TOKEN_ADULTERADO&#x27;).some((e) =&gt; e.nivel === &#x27;CRITICO&#x27; &amp;&amp; e.ip === &#x27;198.51.100.23&#x27;));
+  verificar(&#x27;alerta crítico também vai para alertas.log&#x27;, fs.readFileSync(path.join(PASTA, &#x27;alertas.log&#x27;), &#x27;utf8&#x27;).includes(&#x27;ALERTA_TOKEN_ADULTERADO&#x27;));
+
+  console.log(&#x27;4. Força bruta: alerta e bloqueio&#x27;);
+  const st = [];
+  for (let i = 0; i &lt; 5; i++) st.push((await login(&#x27;203.0.113.9&#x27;, `chute${i}`)).status);
+  verificar(&#x27;5 falhas do mesmo IP -&gt; ALERTA_FORCA_BRUTA&#x27;, eventos(&#x27;ALERTA_FORCA_BRUTA&#x27;).some((e) =&gt; e.ip === &#x27;203.0.113.9&#x27;), st.join(&#x27;,&#x27;));
+  verificar(&#x27;IP bloqueado recebe 429 mesmo com a senha certa&#x27;, (await login(&#x27;203.0.113.9&#x27;)).status === 429);
+  verificar(&#x27;bloqueio registrado como REQUISICAO_BLOQUEADA&#x27;, eventos(&#x27;REQUISICAO_BLOQUEADA&#x27;).some((e) =&gt; e.ip === &#x27;203.0.113.9&#x27;));
+  verificar(&#x27;outro IP continua conseguindo entrar&#x27;, (await login(&#x27;203.0.113.10&#x27;)).status === 302);
+
+  console.log(&#x27;5. Refresh token reutilizado&#x27;);
+  const t2 = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t.corpo.refresh_token });
+  await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t.corpo.refresh_token }, &#x27;198.51.100.50&#x27;);
+  verificar(&#x27;reuso -&gt; REFRESH_REUSO (CRITICO) com impressão do token, não o token&#x27;, eventos(&#x27;REFRESH_REUSO&#x27;).some((e) =&gt; e.nivel === &#x27;CRITICO&#x27; &amp;&amp; /^sha256:[0-9a-f]{12}$/.test(e.refresh_token)) &amp;&amp; t2.status === 200);
+
+  console.log(&#x27;6. Nada sensível em claro nos arquivos&#x27;);
+  const tudo = auditoria.listarArquivos(PASTA).map((f) =&gt; fs.readFileSync(f, &#x27;utf8&#x27;)).join(&#x27;&#x27;) + fs.readFileSync(path.join(PASTA, &#x27;alertas.log&#x27;), &#x27;utf8&#x27;);
+  const proibidos = { &#x27;senha correta&#x27;: &#x27;senha123&#x27;, &#x27;senha errada&#x27;: &#x27;senha-errada-xyz&#x27;, client_secret: WEB.client_secret, access_token: t.corpo.access_token, refresh_token: t.corpo.refresh_token, &#x27;código de autorização&#x27;: l.code };
+  const vazou = Object.entries(proibidos).filter(([, v]) =&gt; tudo.includes(v)).map(([k]) =&gt; k);
+  verificar(&#x27;nenhuma senha, segredo, token ou code nos logs&#x27;, vazou.length === 0, vazou.join(&#x27;, &#x27;));
+  const linhas = tudo.split(&#x27;\n&#x27;).filter(Boolean);
+  verificar(&#x27;todas as linhas são JSON com ts, nivel, tipo e hash&#x27;, linhas.every((x) =&gt; { try { const o = JSON.parse(x); return o.ts &amp;&amp; o.nivel &amp;&amp; o.tipo &amp;&amp; o.hash; } catch { return false; } }));
+
+  console.log(&#x27;7. Integridade (HMAC encadeado)&#x27;);
+  const integ = auditoria.verificarIntegridade(PASTA);
+  verificar(`cadeia íntegra (${integ.total} registros)`, integ.ok, JSON.stringify(integ.erros.slice(0, 2)));
+  const copia = fs.mkdtempSync(path.join(os.tmpdir(), &#x27;auditoria-adulterada-&#x27;));
+  for (const f of auditoria.listarArquivos(PASTA)) fs.copyFileSync(f, path.join(copia, path.basename(f)));
+  const alvo = path.join(copia, &#x27;auditoria.log&#x27;);
+  const ls = fs.readFileSync(alvo, &#x27;utf8&#x27;).split(&#x27;\n&#x27;);
+  const iAlvo = ls.findIndex((x) =&gt; x.includes(&#x27;&quot;status&quot;:401&#x27;));
+  ls[iAlvo] = ls[iAlvo].replace(&#x27;&quot;status&quot;:401&#x27;, &#x27;&quot;status&quot;:200&#x27;);
+  fs.writeFileSync(alvo, ls.join(&#x27;\n&#x27;));
+  const v1 = auditoria.verificarIntegridade(copia);
+  verificar(&#x27;edição de uma linha é detectada (linha exata)&#x27;, !v1.ok &amp;&amp; v1.erros.some((e) =&gt; e.linha === iAlvo + 1 &amp;&amp; e.motivo.includes(&#x27;alterado&#x27;)));
+  ls.splice(iAlvo, 2);
+  fs.writeFileSync(alvo, ls.join(&#x27;\n&#x27;));
+  verificar(&#x27;remoção de linhas é detectada (encadeamento)&#x27;, auditoria.verificarIntegridade(copia).erros.some((e) =&gt; e.motivo.includes(&#x27;encadeamento&#x27;)));
+
+  console.log(&#x27;8. Rotação e retenção&#x27;);
+  for (let i = 0; i &lt; 40; i++) await fetch(`${API}/saldo`);
+  const arquivos = auditoria.listarArquivos(PASTA);
+  verificar(&#x27;arquivo rotacionado ao passar de LOG_MAX_BYTES&#x27;, arquivos.length &gt;= 2, arquivos.map((f) =&gt; path.basename(f)).join(&#x27;,&#x27;));
+  verificar(&#x27;rotação fica registrada no próximo evento&#x27;, auditoria.lerEventos(PASTA).some((e) =&gt; e.rotacao?.arquivo_rotacionado));
+  verificar(&#x27;cadeia continua íntegra entre arquivos&#x27;, auditoria.verificarIntegridade(PASTA).ok);
+
+  console.log(&#x27;9. Análise&#x27;);
+  const a = analisar(PASTA);
+  verificar(&#x27;IP de força bruta aparece como bloqueado na análise&#x27;, a.suspeitos_por_ip.some((x) =&gt; x.ip === &#x27;203.0.113.9&#x27; &amp;&amp; x.bloqueado));
+  verificar(&#x27;análise lista alertas críticos (&gt;= 3)&#x27;, a.alertas.length &gt;= 3, String(a.alertas.length));
+  verificar(&#x27;KPIs calculados (6 indicadores)&#x27;, a.kpis.length === 6);
+
+  console.log(`\nResultado: ${ok} OK, ${falhas} FALHA(S)\n`);
+  process.exit(falhas ? 1 : 0);
+})().catch((e) =&gt; {
+  console.error(`Erro inesperado nos testes: ${e.stack || e.message}`);
+  if (e.code === &#x27;EADDRINUSE&#x27;) console.error(&#x27;Portas de teste 23000/24000/25000 ocupadas.&#x27;);
+  process.exit(2);
+});</code></pre></div></details>
+<details class="arq"><summary><code>testes/teste-fluxo.js</code> <small>124 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>testes/teste-fluxo.js</span><button class="copiar" type="button" aria-label="Copiar testes/teste-fluxo.js">Copiar</button></div><pre><code>// =============================================================
+// teste-fluxo.js — Testes automáticos do laboratório (npm test)
+// Sobe os servidores em portas de teste e verifica cada regra de
+// segurança do OAuth. Saída: [OK] / [FALHA] e código de saída.
+// =============================================================
+process.env.AUTH_PORT = &#x27;14000&#x27;;
+process.env.API_PORT = &#x27;15000&#x27;;
+process.env.CLIENT_PORT = &#x27;13000&#x27;;
+process.env.OAUTH_QUIET = &#x27;1&#x27;;
+// Lab 2: logs dos testes vão para uma pasta temporária (não misturam com logs/ do aluno)
+process.env.LOG_DIR = require(&#x27;node:fs&#x27;).mkdtempSync(require(&#x27;node:path&#x27;).join(require(&#x27;node:os&#x27;).tmpdir(), &#x27;oauth-teste-&#x27;));
+
+const cfg = require(&#x27;../src/config&#x27;);
+const jwt = require(&#x27;../src/jwt&#x27;);
+const { sha256b64url, aleatorio } = require(&#x27;../src/util&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const WEB = cfg.CLIENTES[0];
+const SVC = cfg.CLIENTES[1];
+const REDIRECT = WEB.redirect_uris[0];
+const basic = (c) =&gt; `Basic ${Buffer.from(`${c.client_id}:${c.client_secret}`).toString(&#x27;base64&#x27;)}`;
+
+let ok = 0;
+let falhas = 0;
+function verificar(descricao, condicao, detalhe = &#x27;&#x27;) {
+  if (condicao) { ok++; console.log(`  [OK]    ${descricao}`); }
+  else { falhas++; console.log(`  [FALHA] ${descricao}${detalhe ? ` -&gt; ${detalhe}` : &#x27;&#x27;}`); }
+}
+
+async function token(params, cliente = WEB) {
+  const r = await fetch(`${AUTH}/token`, { method: &#x27;POST&#x27;, headers: { Authorization: basic(cliente) }, body: new URLSearchParams(params) });
+  return { status: r.status, corpo: await r.json() };
+}
+
+async function obterCodigo(verifier, extra = {}) {
+  const corpo = new URLSearchParams({
+    response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read transacoes:read&#x27;,
+    state: &#x27;estado123&#x27;, code_challenge: sha256b64url(verifier), code_challenge_method: &#x27;S256&#x27;,
+    login: &#x27;aluno&#x27;, senha: &#x27;senha123&#x27;, decisao: &#x27;permitir&#x27;, ...extra,
+  });
+  const r = await fetch(`${AUTH}/authorize`, { method: &#x27;POST&#x27;, body: corpo, redirect: &#x27;manual&#x27; });
+  const loc = r.headers.get(&#x27;location&#x27;);
+  return loc ? new URL(loc).searchParams : null;
+}
+
+const getApi = (caminho, tk) =&gt; fetch(`${API}${caminho}`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
+
+(async () =&gt; {
+  await require(&#x27;../src/auth-server&#x27;).iniciar();
+  await require(&#x27;../src/api-financeira&#x27;).iniciar();
+  await require(&#x27;../src/cliente-web&#x27;).iniciar();
+  console.log(&#x27;\nTestes do laboratório OAuth\n&#x27;);
+
+  console.log(&#x27;1. Registro e descoberta&#x27;);
+  const meta = await (await fetch(`${AUTH}/.well-known/oauth-authorization-server`)).json();
+  verificar(&#x27;metadados publicam token_endpoint e PKCE S256&#x27;, meta.token_endpoint &amp;&amp; meta.code_challenge_methods_supported.includes(&#x27;S256&#x27;));
+  verificar(&#x27;App Finanças responde na porta do cliente&#x27;, (await fetch(`http://localhost:${cfg.PORTAS.cliente}/`)).status === 200);
+
+  console.log(&#x27;2. Pedido de autorização&#x27;);
+  const ruim = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: &#x27;http://site-malicioso.exemplo/cb&#x27;, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27;, code_challenge: &#x27;abc&#x27;, code_challenge_method: &#x27;S256&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;redirect_uri não registrada é recusada SEM redirecionar (400)&#x27;, ruim.status === 400 &amp;&amp; !ruim.headers.get(&#x27;location&#x27;));
+  const semPkce = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;pedido sem PKCE volta com error=invalid_request&#x27;, new URL(semPkce.headers.get(&#x27;location&#x27;) || &#x27;http://x&#x27;).searchParams.get(&#x27;error&#x27;) === &#x27;invalid_request&#x27;);
+  const implicito = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;token&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;Implicit Flow (response_type=token) é recusado&#x27;, new URL(implicito.headers.get(&#x27;location&#x27;) || &#x27;http://x&#x27;).searchParams.get(&#x27;error&#x27;) === &#x27;unsupported_response_type&#x27;);
+  const escopoIndevido = await obterCodigo(&#x27;v&#x27;.repeat(43), { scope: &#x27;relatorios:read&#x27; });
+  verificar(&#x27;escopo não permitido ao cliente -&gt; invalid_scope&#x27;, escopoIndevido?.get(&#x27;error&#x27;) === &#x27;invalid_scope&#x27;);
+  const negado = await obterCodigo(&#x27;v&#x27;.repeat(43), { decisao: &#x27;negar&#x27; });
+  verificar(&#x27;usuário que nega o consentimento -&gt; access_denied&#x27;, negado?.get(&#x27;error&#x27;) === &#x27;access_denied&#x27;);
+
+  console.log(&#x27;3. Troca do código (Authorization Code + PKCE)&#x27;);
+  const v1 = aleatorio(32);
+  const q1 = await obterCodigo(v1);
+  verificar(&#x27;login correto devolve code e o mesmo state&#x27;, q1?.get(&#x27;code&#x27;) &amp;&amp; q1.get(&#x27;state&#x27;) === &#x27;estado123&#x27;);
+  const pkceErrado = await token({ grant_type: &#x27;authorization_code&#x27;, code: q1.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: &#x27;verificador-errado&#x27; });
+  verificar(&#x27;code_verifier errado -&gt; invalid_grant&#x27;, pkceErrado.status === 400 &amp;&amp; pkceErrado.corpo.error === &#x27;invalid_grant&#x27;);
+  const v2 = aleatorio(32);
+  const q2 = await obterCodigo(v2);
+  const segredoErrado = await token({ grant_type: &#x27;authorization_code&#x27;, code: q2.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v2 }, { ...WEB, client_secret: &#x27;errado&#x27; });
+  verificar(&#x27;client_secret errado -&gt; 401 invalid_client&#x27;, segredoErrado.status === 401);
+  const v3 = aleatorio(32);
+  const q3 = await obterCodigo(v3);
+  const t1 = await token({ grant_type: &#x27;authorization_code&#x27;, code: q3.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v3 });
+  verificar(&#x27;troca correta devolve access_token + refresh_token&#x27;, t1.status === 200 &amp;&amp; t1.corpo.access_token &amp;&amp; t1.corpo.refresh_token);
+  verificar(&#x27;token traz apenas os escopos pedidos (menor privilégio)&#x27;, t1.corpo.scope === &#x27;saldo:read transacoes:read&#x27;);
+  const reuso = await token({ grant_type: &#x27;authorization_code&#x27;, code: q3.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v3 });
+  verificar(&#x27;código é de uso único (2ª troca -&gt; invalid_grant)&#x27;, reuso.status === 400);
+
+  console.log(&#x27;4. Servidor de recursos (API)&#x27;);
+  verificar(&#x27;GET /transacoes com token válido -&gt; 200&#x27;, (await getApi(&#x27;/transacoes&#x27;, t1.corpo.access_token)).status === 200);
+  verificar(&#x27;GET /transacoes sem token -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;)).status === 401);
+  const transf = await fetch(`${API}/transferencias`, { method: &#x27;POST&#x27;, headers: { Authorization: `Bearer ${t1.corpo.access_token}` } });
+  verificar(&#x27;POST /transferencias sem escopo transacoes:write -&gt; 403&#x27;, transf.status === 403);
+  const [h, , s] = t1.corpo.access_token.split(&#x27;.&#x27;);
+  const pAdulterado = Buffer.from(JSON.stringify({ ...jwt.decodificar(t1.corpo.access_token), scope: &#x27;transacoes:write&#x27; })).toString(&#x27;base64url&#x27;);
+  verificar(&#x27;token adulterado (escopo alterado) -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;, `${h}.${pAdulterado}.${s}`)).status === 401);
+  const expirado = jwt.assinar({ ...jwt.decodificar(t1.corpo.access_token), exp: Math.floor(Date.now() / 1000) - 5 }, cfg.SEGREDO_ASSINATURA);
+  verificar(&#x27;token expirado -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;, expirado)).status === 401);
+
+  console.log(&#x27;5. Renovação (refresh token com rotação)&#x27;);
+  const t2 = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t1.corpo.refresh_token });
+  verificar(&#x27;refresh válido devolve NOVO par de tokens&#x27;, t2.status === 200 &amp;&amp; t2.corpo.refresh_token !== t1.corpo.refresh_token);
+  const reusoRt = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t1.corpo.refresh_token });
+  verificar(&#x27;reuso do refresh antigo é detectado (invalid_grant)&#x27;, reusoRt.status === 400 &amp;&amp; reusoRt.corpo.error_description.includes(&#x27;REUSO&#x27;));
+  const t3 = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t2.corpo.refresh_token });
+  verificar(&#x27;após reuso, o refresh novo também foi revogado (família)&#x27;, t3.status === 400);
+
+  console.log(&#x27;6. Client Credentials (servidor-servidor)&#x27;);
+  const cc = await token({ grant_type: &#x27;client_credentials&#x27;, scope: &#x27;relatorios:read&#x27; }, SVC);
+  verificar(&#x27;serviço obtém token sem usuário e sem refresh_token&#x27;, cc.status === 200 &amp;&amp; !cc.corpo.refresh_token);
+  verificar(&#x27;GET /relatorios/resumo com token do serviço -&gt; 200&#x27;, (await getApi(&#x27;/relatorios/resumo&#x27;, cc.corpo.access_token)).status === 200);
+  verificar(&#x27;token do serviço não acessa /transacoes -&gt; 403&#x27;, (await getApi(&#x27;/transacoes&#x27;, cc.corpo.access_token)).status === 403);
+  const ccWeb = await token({ grant_type: &#x27;client_credentials&#x27; }, WEB);
+  verificar(&#x27;App Finanças não pode usar client_credentials -&gt; unauthorized_client&#x27;, ccWeb.corpo.error === &#x27;unauthorized_client&#x27;);
+
+  console.log(`\nResultado: ${ok} OK, ${falhas} FALHA(S)\n`);
+  process.exit(falhas ? 1 : 0);
+})().catch((e) =&gt; {
+  console.error(`Erro inesperado nos testes: ${e.stack || e.message}`);
+  if (e.code === &#x27;EADDRINUSE&#x27;) console.error(&#x27;Portas de teste 13000/14000/15000 ocupadas.&#x27;);
+  process.exit(2);
+});</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Duas linhas: <code>25 OK, 0 FALHA(S)</code> e <code>27 OK, 0 FALHA(S)</code>.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Resultado: 25 OK, 0 FALHA(S)
+Resultado: 27 OK, 0 FALHA(S)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>  [FALHA] nenhuma senha, segredo, token ou code nos logs -&gt; senha errada</pre><p><b>Como corrigir:</b> Algum evento grava dado sensível em claro: confira o nome do campo (mascarar() age pelo nome) ou use cifrar().</p></div></div></article>
+<article class="cartao passo" id="passo10"><div class="passo-topo"><label><input type="checkbox" class="item" id="i20" data-rotulo="Passo 10"><span class="num">Passo 10</span><span class="tit">Registrar a instrumentação no Git</span></label><span class="amb">Git</span></div>
+<p>Crie também a configuração de referência do Filebeat e o modelo do plano antes do commit (serão usados nos passos 17 e 18).</p>
+<div class="codigo"><div class="codigo-topo"><span>Git — comandos</span><button class="copiar" type="button" aria-label="Copiar Git — comandos">Copiar</button></div><pre><code>git add .
+git commit -m &quot;feat: auditoria e logs da API (eventos, alertas, integridade, rotacao)&quot;
+git log --oneline -3</code></pre></div>
+<details class="arq"><summary><code>config/filebeat.yml</code> <small>40 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>config/filebeat.yml</span><button class="copiar" type="button" aria-label="Copiar config/filebeat.yml">Copiar</button></div><pre><code># =============================================================
+# config/filebeat.yml — EXEMPLO (opcional, não executado no lab)
+# Envia logs/auditoria.log (JSON Lines) para o Elasticsearch,
+# onde o Kibana permite filtrar, correlacionar e criar alertas.
+# Pré-requisitos (fora do laboratório): Elastic Stack instalado
+# ou conta no Elastic Cloud, e Filebeat 8.x.
+# Uso: filebeat -e -c config\filebeat.yml
+# =============================================================
+filebeat.inputs:
+  - type: filestream
+    id: api-financeira-auditoria
+    paths:
+      - ${PASTA_PROJETO:.}/logs/auditoria*.log   # atual + rotacionados
+    parsers:
+      - ndjson:
+          target: &quot;&quot;            # campos do JSON vão para a raiz do documento
+          add_error_key: true
+    fields:
+      servico: api-financeira
+      ambiente: laboratorio
+    fields_under_root: true
+
+processors:
+  - timestamp:                 # usa o &quot;ts&quot; do evento como @timestamp
+      field: ts
+      layouts: [&#x27;2006-01-02T15:04:05.999Z&#x27;]
+  - drop_fields:
+      fields: [&quot;hash_anterior&quot;]  # o hash fica; o elo anterior não é útil na busca
+
+output.elasticsearch:
+  hosts: [&quot;${ELASTIC_HOST:http://localhost:9200}&quot;]
+  username: &quot;${ELASTIC_USUARIO}&quot;
+  password: &quot;${ELASTIC_SENHA}&quot;   # NUNCA grave a senha aqui: use variável de ambiente
+  index: &quot;auditoria-api-%{+yyyy.MM.dd}&quot;
+
+setup.template.name: &quot;auditoria-api&quot;
+setup.template.pattern: &quot;auditoria-api-*&quot;
+# Retenção no Elasticsearch: crie uma política ILM (ex.: apagar após 90 dias)
+setup.ilm.enabled: false</code></pre></div></details>
+<details class="arq"><summary><code>docs/plano-auditoria.md</code> <small>58 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>docs/plano-auditoria.md</span><button class="copiar" type="button" aria-label="Copiar docs/plano-auditoria.md">Copiar</button></div><pre><code># Plano de auditoria e logs — API Financeira
+
+**Grupo:** _(nomes dos integrantes)_  **Turma:** _____  **Data:** ___/___/______
+
+## 1. Contexto e objetivo
+A API financeira (provedor OAuth, API de recursos e App Finanças) processa logins, emissão de tokens, consultas e transferências. O objetivo do plano é **registrar o que importa, proteger os registros e analisá-los periodicamente** para detectar e responder a incidentes.
+
+## 2. Ferramentas de auditoria (seleção e justificativa)
+| Camada | No laboratório | Em produção (recomendado) | Por quê |
+|---|---|---|---|
+| Geração | `src/auditoria.js` (JSON Lines) | Biblioteca de log estruturado (ex.: pino) com o mesmo formato | Um evento por linha, campos fixos: qualquer ferramenta lê sem conversão |
+| Coleta/centralização | Pasta `logs/` | Filebeat → **ELK Stack** (Elasticsearch + Kibana) ou **Splunk** | Consolida logs de vários servidores; busca e correlação em segundos |
+| Análise | `npm run analisar` (KPIs, correlação, relatório) | Dashboards do Kibana/Splunk + consultas salvas | Visualização, filtros e indicadores |
+| Alerta | Console + `logs/alertas.log` + webhook | Regras do SIEM → Slack/Teams/e-mail/plantão | Resposta rápida a eventos críticos |
+
+## 3. Eventos registrados
+| Categoria | Eventos | Nível |
+|---|---|---|
+| Acesso (todas as requisições) | `HTTP_REQUISICAO` (método, rota, status, duração, IP, req_id) | INFO/AVISO/ERRO |
+| Autenticação | `LOGIN_SUCESSO`, `LOGIN_FALHA`, `CLIENTE_AUTH_FALHA`, `CONSENTIMENTO_NEGADO` | INFO/AVISO |
+| Tokens | `TOKEN_EMITIDO` (com `jti`), `TOKEN_RECUSADO`, `TOKEN_REVOGADO`, `REFRESH_REUSO` | INFO/AVISO/**CRITICO** |
+| Autorização | `ACESSO_PERMITIDO`, `ACESSO_NEGADO` (401/403 + motivo), `AUTORIZACAO_RECUSADA` | INFO/AVISO |
+| Operações sensíveis | `OPERACAO_SENSIVEL` (transferências) | INFO |
+| Ataques detectados | `ALERTA_FORCA_BRUTA`, `ALERTA_TOKEN_ADULTERADO`, `REQUISICAO_BLOQUEADA` | **CRITICO**/AVISO |
+| Falhas | `ERRO_SERVIDOR` | ERRO |
+
+**Nunca registrar em claro:** senhas, `client_secret`, tokens, código de autorização, query string. Tokens viram impressão digital (`sha256:…`); o login digitado errado vai **cifrado (AES-256-GCM)**.
+
+## 4. Configuração e proteção dos logs
+- **Integridade:** HMAC encadeado — cada linha assina o conteúdo + o hash da anterior; edição ou remoção é apontada pela verificação.
+- **Confidencialidade:** arquivos com permissão restrita, dados sensíveis cifrados, chaves em cofre/variável de ambiente, `logs/` fora do Git.
+- **Rotação:** novo arquivo ao atingir `LOG_MAX_BYTES` (lab: 256 KB; produção: diária ou 100 MB).
+- **Retenção:** manter `LOG_RETENCAO_ARQUIVOS` arquivos / `LOG_RETENCAO_DIAS` dias localmente; no SIEM, 90 dias quentes + 1 ano arquivado (ajustar à LGPD e às normas do setor financeiro).
+- **Correlação:** `X-Request-Id` propagado do App Finanças ao provedor e à API; `jti` liga o token emitido a cada uso.
+
+## 5. Análise periódica e resposta
+| Frequência | O que fazer | Indicador / meta |
+|---|---|---|
+| Tempo real | Alertas críticos (força bruta, token adulterado, reuso de refresh) | 0 alertas não tratados |
+| Diária | `npm run analisar`: KPIs, IPs suspeitos, recomendações | Falha de login &lt; 20%; erro HTTP &lt; 10% |
+| Semanal | Revisar 403 (escalonamento), novos IPs, clientes com falhas | Tendência estável |
+| Mensal | Verificar integridade de todos os arquivos, revisar regras e limites | Integridade 100% |
+
+**Procedimento de incidente:** (1) alerta recebido → (2) rastrear por IP/`req_id`/`jti` → (3) conter (bloquear IP, revogar tokens) → (4) comunicar → (5) registrar lições aprendidas e ajustar regras.
+
+## 6. Evidências do laboratório
+- [ ] `npm test` com 25 + 27 OK
+- [ ] Saída do `npm run simular` com os 429
+- [ ] Relatório `relatorio/relatorio-auditoria.html` (print dos KPIs e alertas)
+- [ ] Bloqueio pelo navegador (5 senhas erradas → 429)
+- [ ] Adulteração detectada pelo analisador (linha apontada)
+- [ ] Rotação observada com `LOG_MAX_BYTES` pequeno
+
+## Referências
+- SEDUC-SP. *Rastreando ameaças: auditoria e logs para APIs seguras* — Programação Back-End, 2ª série, 4º bimestre, semana 25, aula 3.
+- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
+- [NIST SP 800-92 — Guide to Computer Security Log Management](https://csrc.nist.gov/pubs/sp/800/92/final)</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Commit na branch lab2-auditoria; <code>git status</code> não lista a pasta logs/.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[lab2-auditoria 8c41d2e] feat: auditoria e logs da API ...</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>logs/auditoria.log aparece em git status</pre><p><b>Como corrigir:</b> Faltou a linha logs/ no .gitignore; depois rode git rm -r --cached logs.</p></div></div></article>
+<article class="cartao passo" id="passo11"><div class="passo-topo"><label><input type="checkbox" class="item" id="i21" data-rotulo="Passo 11"><span class="num">Passo 11</span><span class="tit">Iniciar e observar os logs ao vivo</span></label><span class="amb">PowerShell (2 terminais) + Navegador</span></div>
+<p>No 1º terminal suba os servidores. No 2º acompanhe o log em tempo real. Use o App Finanças (login, consultas). Na aba Rede do DevTools, copie o cabeçalho <code>X-Request-Id</code> de uma resposta e rastreie-o nos três serviços.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell (2 terminais) + Navegador — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell (2 terminais) + Navegador — comandos">Copiar</button></div><pre><code># terminal 1
+npm start
+# terminal 2
+Get-Content logs\auditoria.log -Wait -Tail 5
+# rastrear uma requisição (Ctrl+C no Get-Content antes)
+node src\analisar-logs.js --req=&lt;cole-o-X-Request-Id&gt;</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Eventos HTTP_REQUISICAO, LOGIN_SUCESSO, TOKEN_EMITIDO e ACESSO_PERMITIDO aparecendo; o rastreio lista eventos de cliente, auth e api.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>{&quot;ts&quot;:&quot;2026-11-03T13:02:11.481Z&quot;,&quot;nivel&quot;:&quot;INFO&quot;,&quot;tipo&quot;:&quot;LOGIN_SUCESSO&quot;,&quot;origem&quot;:&quot;auth&quot;,&quot;sub&quot;:&quot;u1&quot;,...,&quot;req_id&quot;:&quot;5f0c...&quot;}</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Get-Content : Não é possível localizar o caminho &#x27;...\logs\auditoria.log&#x27;</pre><p><b>Como corrigir:</b> O arquivo só nasce na 1ª requisição: abra http://localhost:3000 e repita.</p></div></div></article>
+<article class="cartao passo" id="passo12"><div class="passo-topo"><label><input type="checkbox" class="item" id="i22" data-rotulo="Passo 12"><span class="num">Passo 12</span><span class="tit">Provocar força bruta pelo navegador</span></label><span class="amb">Navegador + PowerShell</span></div>
+<p>Clique em Sair e tente entrar <b>5 vezes com senha errada</b>. Na 5ª, o terminal do servidor mostra o alerta em vermelho; na 6ª, mesmo com a senha certa, o provedor responde <b>429</b>. Para liberar antes dos 5 minutos, reinicie o servidor (os bloqueios ficam em memória — discuta por que em produção isso precisa de um armazenamento compartilhado, como Redis).</p>
+<div class="codigo"><div class="codigo-topo"><span>Navegador + PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar Navegador + PowerShell — comandos">Copiar</button></div><pre><code>Get-Content logs\alertas.log -Tail 3</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Linha ALERTA_FORCA_BRUTA com o seu IP (::1 ou 127.0.0.1) e tela de bloqueio no navegador.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[ALERTA CRITICO] ... ALERTA_FORCA_BRUTA ip=::1 IP bloqueado por 300s
+429 Too Many Requests</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Nenhum alerta após 5 erros</pre><p><b>Como corrigir:</b> As falhas precisam ocorrer em menos de 60 s (JANELA_S) e no mesmo servidor em execução.</p></div></div></article>
+<article class="cartao passo" id="passo13"><div class="passo-topo"><label><input type="checkbox" class="item" id="i23" data-rotulo="Passo 13"><span class="num">Passo 13</span><span class="tit">Simular tráfego normal e ataques</span></label><span class="amb">PowerShell (2º terminal)</span></div>
+<p>Com o servidor rodando, gere tráfego de 3 usuários, do serviço de relatórios e de cinco ataques vindos de IPs diferentes.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell (2º terminal) — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell (2º terminal) — comandos">Copiar</button></div><pre><code>npm run simular</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Força bruta termina em 429 e o terminal do servidor exibe os alertas críticos.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>status recebidos: 401, 401, 401, 401, 401, 429, 429, 429
+Concluído: 18 requisições normais e 26 de ataque</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Erro: fetch failed. O laboratório está rodando?</pre><p><b>Como corrigir:</b> Deixe npm start rodando no terminal 1 e execute npm run simular no terminal 2.</p></div></div></article>
+<article class="cartao passo" id="passo14"><div class="passo-topo"><label><input type="checkbox" class="item" id="i24" data-rotulo="Passo 14"><span class="num">Passo 14</span><span class="tit">Analisar os logs</span></label><span class="amb">PowerShell + Navegador</span></div>
+<p>Gere os indicadores e o relatório. Use <code>--decifrar</code> para ver o que foi digitado nas falhas de login (acesso restrito) e responda: qual IP deve ser bloqueado no firewall? Qual cliente tentou acessar fora do escopo?</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell + Navegador — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell + Navegador — comandos">Copiar</button></div><pre><code>npm run analisar
+Start-Process relatorio\relatorio-auditoria.html
+node src\analisar-logs.js --decifrar</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> KPIs com ATENÇÃO, alertas listados e 203.0.113.66 / 203.0.113.99 marcados como bloqueados.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[ATENCAO] Alertas críticos: 6 (meta 0)
+  203.0.113.66   9 [BLOQUEADO] LOGIN_FALHA, ...</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Nenhum log em ...\logs. Rode &quot;npm start&quot; e gere tráfego</pre><p><b>Como corrigir:</b> Execute o passo 13 antes (ou rode a análise na pasta do projeto).</p></div></div></article>
+<article class="cartao passo" id="passo15"><div class="passo-topo"><label><input type="checkbox" class="item" id="i25" data-rotulo="Passo 15"><span class="num">Passo 15</span><span class="tit">Testar a integridade dos logs</span></label><span class="amb">PowerShell + VS Code</span></div>
+<p>Faça uma cópia de segurança, abra <code>logs\auditoria.log</code> no VS Code e troque um <code>"status":401</code> por <code>"status":200</code> (como faria um invasor apagando rastros). Salve e rode a análise: a linha exata é apontada e o código de saída vira 2. Depois restaure a cópia.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell + VS Code — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell + VS Code — comandos">Copiar</button></div><pre><code>Copy-Item logs\auditoria.log logs\copia-auditoria.txt
+code logs\auditoria.log        # edite e salve
+npm run analisar; $LASTEXITCODE   # esperado: 2
+Copy-Item logs\copia-auditoria.txt logs\auditoria.log -Force
+npm run analisar; $LASTEXITCODE   # esperado: 0</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> “Integridade: VIOLADA … linha N: conteúdo alterado” e, após restaurar, OK.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Integridade: VIOLADA (...)
+   ! auditoria.log linha 37: conteúdo alterado (HMAC não confere)
+2</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Integridade: OK  (a edição não foi salva)</pre><p><b>Como corrigir:</b> Salve o arquivo no VS Code (Ctrl+S) antes de rodar a análise.</p></div></div></article>
+<article class="cartao passo" id="passo16"><div class="passo-topo"><label><input type="checkbox" class="item" id="i26" data-rotulo="Passo 16"><span class="num">Passo 16</span><span class="tit">Observar rotação e retenção</span></label><span class="amb">PowerShell</span></div>
+<p>Reinicie com arquivo máximo de 8 KB e retenção de 3 arquivos, gere tráfego duas vezes e liste a pasta. A rotação fica registrada no campo <code>rotacao</code> do evento seguinte; a análise continua íntegra e avisa que o início da cadeia foi expurgado.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code># Ctrl+C no terminal do servidor, depois:
+$env:LOG_MAX_BYTES = 8000; $env:LOG_RETENCAO_ARQUIVOS = 3
+npm start
+# no 2º terminal:
+npm run simular; npm run simular
+Get-ChildItem logs
+npm run analisar
+# ao terminar (terminal 1): Ctrl+C e
+Remove-Item Env:LOG_MAX_BYTES, Env:LOG_RETENCAO_ARQUIVOS</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> No máximo 3 arquivos auditoria-AAAAMMDDT…-NNN.log além do auditoria.log.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>auditoria-20261103T131502117-000.log ... (3 arquivos) + auditoria.log
+Integridade: OK</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Só existe auditoria.log</pre><p><b>Como corrigir:</b> As variáveis precisam ser definidas no MESMO terminal antes do npm start.</p></div></div></article>
+<article class="cartao passo" id="passo17"><div class="passo-topo"><label><input type="checkbox" class="item" id="i27" data-rotulo="Passo 17"><span class="num">Passo 17</span><span class="tit">(Opcional) Centralizar e notificar</span></label><span class="amb">VS Code + serviços externos</span></div>
+<p>Leia <code>config/filebeat.yml</code>: é como estes mesmos logs seriam enviados ao <b>ELK Stack</b> (ou, de forma análoga, ao Splunk). Se a turma tiver um canal de testes no Slack/Teams com webhook, configure <code>ALERTA_WEBHOOK</code> e repita o passo 12. <b>Etapa manual</b>: exige conta/instalação externas; o script não configura.</p>
+<div class="codigo"><div class="codigo-topo"><span>VS Code + serviços externos — comandos</span><button class="copiar" type="button" aria-label="Copiar VS Code + serviços externos — comandos">Copiar</button></div><pre><code>$env:ALERTA_WEBHOOK = &quot;https://hooks.slack.com/services/SEU/WEBHOOK/AQUI&quot;
+npm start</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Mensagem de alerta chega no canal (ou o grupo descreve o fluxo no plano).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Mensagem “[ALERTA CRITICO] … ALERTA_FORCA_BRUTA …” no canal</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>[auditoria] webhook falhou: fetch failed</pre><p><b>Como corrigir:</b> Confira a URL do webhook e a rede da escola (proxy pode bloquear). É etapa opcional.</p></div></div></article>
+<article class="cartao passo" id="passo18"><div class="passo-topo"><label><input type="checkbox" class="item" id="i28" data-rotulo="Passo 18"><span class="num">Passo 18</span><span class="tit">Redigir o plano de auditoria e logs</span></label><span class="amb">VS Code</span></div>
+<p>Etapa <b>Execução</b> do roteiro: complete <code>docs/plano-auditoria.md</code> com os nomes do grupo, adapte as justificativas com as palavras do grupo e anexe as evidências dos passos 9 e 11 a 16. O plano precisa cobrir: seleção de ferramentas, eventos e configuração dos logs, e o procedimento de análise periódica.</p>
+<p class="ok"><b>Resultado esperado:</b> As seis seções do plano preenchidas.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>docs/plano-auditoria.md com as 6 seções preenchidas e evidências</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Plano copiado do modelo sem adaptação e sem prints</pre><p><b>Como corrigir:</b> Reescreva com as palavras do grupo e anexe os prints dos passos 9 e 11–16.</p></div></div></article>
+<article class="cartao passo" id="passo19"><div class="passo-topo"><label><input type="checkbox" class="item" id="i29" data-rotulo="Passo 19"><span class="num">Passo 19</span><span class="tit">Responder às perguntas e entregar</span></label><span class="amb">Git + VS Code</span></div>
+<p>Responda às quatro perguntas da mensagem do Slack (o bloco de Respostas desta página serve de conferência após 50%), registre o plano e entregue. Se a turma usa repositório remoto, a publicação é manual: <code>git push -u origin lab2-auditoria</code> após login no GitHub.</p>
+<div class="codigo"><div class="codigo-topo"><span>Git + VS Code — comandos</span><button class="copiar" type="button" aria-label="Copiar Git + VS Code — comandos">Copiar</button></div><pre><code>git add docs
+git commit -m &quot;docs: plano de auditoria e logs do grupo&quot;
+git log --oneline -4</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Commit do plano na branch lab2-auditoria e respostas entregues.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>a1b2c3d docs: plano de auditoria e logs do grupo
+8c41d2e feat: auditoria e logs da API ...</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>nothing to commit, working tree clean</pre><p><b>Como corrigir:</b> Salve o arquivo no VS Code (Ctrl+S) antes do git add.</p></div></div></article>
+</section>
+<section class="cartao"><h2>Rubrica de avaliação (10 pontos)</h2><table class="tab rub"><thead><tr><th>Item</th><th>Critério de certo</th><th>Pontuação</th><th>Máx.</th></tr></thead><tbody>
+<tr><td><b>E1 — Instrumentação e testes (passos 3–10)</b></td><td>Print do <code>npm test</code> com 25 OK e 27 OK e commit na branch lab2-auditoria.</td><td>Certo: 1,0 · Errado: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>E2 — Logs ao vivo e correlação (passo 11)</b></td><td>Print de eventos no <code>Get-Content -Wait</code> e de um rastreio <code>--req</code> com eventos de 2+ serviços.</td><td>0,5 por evidência</td><td class="num">1,0</td></tr>
+<tr><td><b>E3 — Detecção e bloqueio (passos 12–13)</b></td><td>Print do alerta de força bruta/429 no navegador e da saída do <code>npm run simular</code>.</td><td>0,5 por evidência</td><td class="num">1,0</td></tr>
+<tr><td><b>E4 — Análise, integridade e rotação (14–16)</b></td><td>Print do relatório HTML, da violação de integridade detectada (linha) e da pasta logs com arquivos rotacionados.</td><td>Os 3 itens: 1,0 · 2 itens: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>E5 — Plano de auditoria (18–19)</b></td><td><code>docs/plano-auditoria.md</code> com ferramentas justificadas, eventos e proteção dos logs, procedimento de análise periódica e evidências; commit.</td><td>0,5 por item presente</td><td class="num">2,0</td></tr>
+<tr><td><b>P1 — Ferramentas</b></td><td>Indica centralização (ELK/Splunk ou similar) + coletor ou log estruturado <b>e</b> justifica (consolidação, busca/correlação, alertas).</td><td>Certo: 1,0 · Sem justificativa: 0,5 · Errado: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P2 — Configuração e proteção</b></td><td>Cita eventos críticos com campos mínimos, o que NÃO registrar, integridade e retenção/rotação.</td><td>4 elementos: 1,0 · 2–3: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P3 — Métodos de análise</b></td><td>Cita ao menos 3: limiar em janela, assinaturas, correlação, indicadores/linha de base, visualização.</td><td>≥3: 1,0 · 2: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P4 — Comunicação entre equipes</b></td><td>Propõe ao menos 3 mecanismos concretos (alerta em canal, runbook/plantão, severidade comum, dashboard/revisão, pós-incidente).</td><td>≥3: 1,0 · 2: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr class="total"><td colspan="3">Total</td><td class="num">10,0</td></tr></tbody></table></section>
+<section class="cartao bloqueio" id="aviso"><h2>Respostas da atividade</h2><p>🔒 As respostas aparecem automaticamente quando o progresso chegar a <b>50%</b>.</p></section>
+<section class="cartao respostas" id="respostas" style="display:none"><h2>Respostas da atividade</h2><h3>Caso prático (roteiro, item 2)</h3><div class="resp"><h4>2.1 — Seleção de ferramentas de auditoria</h4><p>Logs em <b>JSON Lines</b> gerados pela própria API (no lab, <code>src/auditoria.js</code>), coletados pelo <b>Filebeat</b> e centralizados no <b>ELK Stack</b> (Elasticsearch para busca e retenção, Kibana para dashboards e alertas). O ELK é a escolha para a escola e para equipes menores por ser aberto e amplamente documentado; <b>Splunk</b> é alternativa comercial com correlação e alertas prontos. Regras de detecção em tempo real ficam na aplicação (bloqueio imediato) e no SIEM (visão consolidada de várias APIs). No laboratório, o analisador (<code>npm run analisar</code>) faz o papel do dashboard.</p></div><div class="resp"><h4>2.2 — Eventos registrados e configuração</h4><ul><li><b>Eventos:</b> todas as requisições (log de acesso), logins com sucesso e falha, falhas de autenticação de cliente, emissão/recusa/revogação de tokens, acessos permitidos e negados (401/403 com motivo), operações sensíveis (transferências), reuso de refresh token, tokens adulterados e erros 500.</li><li><b>Campos:</b> <code>ts</code> (UTC), <code>nivel</code>, <code>tipo</code>, <code>origem</code>, <code>ip</code>, <code>sub</code>, <code>client_id</code>, <code>rota</code>, <code>status</code>, <code>req_id</code>, <code>jti</code>, <code>motivo</code>.</li><li><b>Proteção:</b> nunca gravar senha, segredo, token ou query string; impressão digital para tokens; cifra AES-256-GCM para o login digitado; HMAC encadeado; permissão restrita; <code>logs/</code> fora do Git; chaves em cofre.</li><li><b>Armazenamento:</b> rotação por tamanho (ou diária) e retenção definida (ex.: 90 dias consultáveis + 1 ano arquivado, conforme LGPD e normas do setor).</li></ul></div><div class="resp"><h4>2.3 — Procedimento de análise periódica</h4><ol><li><b>Tempo real:</b> alertas críticos (força bruta, token adulterado, reuso de refresh) → plantão.</li><li><b>Diário:</b> rodar a análise, conferir KPIs (falha de login &lt; 20%, erro HTTP &lt; 10%, 0 alertas sem tratamento, integridade 100%) e IPs suspeitos.</li><li><b>Investigação:</b> rastrear por <code>ip</code>, <code>req_id</code> e <code>jti</code>; decifrar logins apenas quando necessário, com registro de quem acessou.</li><li><b>Resposta:</b> conter (bloquear IP no firewall, revogar tokens, avisar usuário), registrar o incidente e ajustar regras.</li><li><b>Mensal:</b> verificar a integridade de todos os arquivos, revisar limites e a política de retenção.</li></ol><p>Exemplo do lab: a análise mostrou 203.0.113.66 com 5 falhas de login e 3 requisições bloqueadas em segundos — força bruta confirmada; recomendação: bloqueio permanente no firewall.</p></div><h3>Perguntas da atividade</h3><div class="resp"><h4>1. Quais ferramentas de auditoria vocês recomendariam para centralizar e analisar os logs da nossa API, e por quê?</h4><p>Recomendamos uma cadeia de três partes: <b>(1) log estruturado na própria API</b> (JSON Lines, um evento por linha com campos padronizados), <b>(2) um coletor</b> como o <b>Filebeat</b>, e <b>(3) uma plataforma de centralização e análise</b> — o <b>ELK Stack</b> (Elasticsearch + Kibana), ou o <b>Splunk</b> se a empresa preferir uma solução comercial com suporte. Motivos: consolidam os logs de várias APIs e servidores num só lugar (como no exemplo prático do material), permitem buscar e correlacionar eventos em segundos, criar dashboards com indicadores e configurar alertas para eventos críticos. O formato estruturado é o que torna tudo isso possível: no laboratório os mesmos arquivos são lidos pelo nosso analisador e seriam lidos pelo Filebeat sem nenhuma conversão (<code>config/filebeat.yml</code>). Para a resposta imediata, mantemos também regras na própria aplicação (bloqueio automático de força bruta).</p></div><div class="resp"><h4>2. Como vocês configurariam os logs para garantir que os eventos críticos sejam devidamente registrados e protegidos?</h4><ul><li><b>O que registrar:</b> tentativas de acesso (sucesso e falha), emissão e recusa de tokens, acessos negados com motivo, operações sensíveis, erros e sinais de ataque — sempre com data/hora UTC, IP, usuário, cliente, rota, status e um <code>req_id</code> para correlação.</li><li><b>O que nunca registrar:</b> senhas, segredos, tokens completos e query strings; usar impressão digital (hash) para tokens e <b>cifrar</b> dados sensíveis (no lab, AES-256-GCM no login digitado).</li><li><b>Integridade:</b> assinatura HMAC encadeada por linha (qualquer edição ou remoção é apontada — passo 15), envio imediato para o servidor central e acesso de escrita restrito.</li><li><b>Segurança do arquivo:</b> permissão mínima, pasta fora do controle de versão, chaves em cofre/variáveis de ambiente, validação do <code>X-Request-Id</code> contra injeção.</li><li><b>Rotação e retenção:</b> novo arquivo por tamanho ou por dia, retenção definida em política (ex.: 90 dias + arquivamento), respeitando a LGPD.</li></ul></div><div class="resp"><h4>3. Quais métodos de análise de dados vocês utilizariam para identificar incidentes de segurança a partir dos logs?</h4><ul><li><b>Regras de limiar em janela de tempo:</b> N falhas do mesmo IP em X segundos → força bruta (no lab: 5 em 60 s → alerta e bloqueio 429).</li><li><b>Assinaturas de ataque:</b> eventos que por si só indicam incidente — token com assinatura inválida, reuso de refresh token.</li><li><b>Correlação:</b> agrupar por IP, usuário, cliente, <code>req_id</code> e <code>jti</code> para reconstruir o que aconteceu (no lab: <code>--req=&lt;id&gt;</code> mostra a mesma ação nos três serviços).</li><li><b>Indicadores e linha de base:</b> taxa de falha de login, taxa de erro HTTP, latência p95, alertas críticos e IPs bloqueados, comparados com metas; desvios da média (picos de 403 ou 401) disparam investigação.</li><li><b>Visualização:</b> linha do tempo de eventos por minuto e ranking de IPs suspeitos.</li><li><b>Verificação de integridade</b> periódica e <b>revisões</b> para ajustar limites e regras.</li></ul></div><div class="resp"><h4>4. Como vocês sugeririam melhorar a comunicação entre as equipes de segurança e TI para garantir uma resposta rápida a incidentes detectados pelos logs?</h4><ul><li><b>Alertas automáticos num canal compartilhado</b> (Slack/Teams via webhook — <code>ALERTA_WEBHOOK</code> no lab) com o essencial: tipo, IP, horário e <code>req_id</code> para rastreio.</li><li><b>Plano de resposta (runbook)</b> por tipo de alerta: quem é acionado, primeiros passos (bloquear IP, revogar tokens) e prazo, com plantão definido.</li><li><b>Classificação de severidade comum</b> (INFO, AVISO, ERRO, CRÍTICO) para as duas equipes falarem a mesma língua.</li><li><b>Dashboard único</b> com os mesmos indicadores para segurança e TI e reunião curta de revisão semanal.</li><li><b>Pós-incidente sem culpados:</b> registrar linha do tempo, causa e ajustes nas regras de log e alerta.</li></ul><blockquote>“Equipe, proposta: centralizar os logs da API no ELK com Filebeat; alertas críticos (força bruta, token adulterado, reuso de refresh) vão para #seg-incidentes com IP e req_id; bloqueio automático após 5 falhas/60 s; análise diária com KPIs e verificação de integridade mensal. Plano e runbook em docs/plano-auditoria.md.”</blockquote></div></section>
+<section class="cartao"><h2>Fontes</h2><ul class="fontes">
+<li>SEDUC-SP — Roteiro de Atividade Prática “Rastreando ameaças: auditoria e logs para APIs seguras” (SISANO2C2B4S25A3AP), Programação Back-End — material de referência</li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html">OWASP Logging Cheat Sheet</a> <small>https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html</small></li>
+<li><a href="https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/">OWASP Top 10 (2021) — A09 Security Logging and Monitoring Failures</a> <small>https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/</small></li>
+<li><a href="https://csrc.nist.gov/pubs/sp/800/92/final">NIST SP 800-92 — Guide to Computer Security Log Management</a> <small>https://csrc.nist.gov/pubs/sp/800/92/final</small></li>
+<li><a href="https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-input-filestream.html">Elastic — Filebeat: filestream input</a> <small>https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-input-filestream.html</small></li>
+<li><a href="https://docs.splunk.com/Documentation/Splunk">Splunk — documentação</a> <small>https://docs.splunk.com/Documentation/Splunk</small></li>
+<li><a href="https://jsonlines.org/">JSON Lines — formato de texto com um JSON por linha</a> <small>https://jsonlines.org/</small></li>
+<li><a href="https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm">Lei nº 13.709/2018 — Lei Geral de Proteção de Dados (LGPD)</a> <small>https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm</small></li>
+<li><a href="https://nodejs.org/api/crypto.html">Node.js — módulo crypto (HMAC, AES-GCM)</a> <small>https://nodejs.org/api/crypto.html</small></li>
+<li>Laboratório — seção 1 (aula 1): Descomplicando o OAuth (atividade-oauth-api)</li>
+</ul></section>
+<section class="cartao"><h2>Feedback do aluno</h2>
+<label for="feedback">O que funcionou, o que foi difícil e o que você mudaria nesta atividade?</label>
+<textarea id="feedback" rows="5" placeholder="Escreva aqui..."></textarea>
+<div class="acoes"><button type="button" id="btnResumo">Copiar resumo para entrega</button><span id="msgResumo" role="status"></span></div></section>
+</main>
+<script>(() => {
+  // Estado mantido apenas em memória durante a sessão (sem localStorage)
+  const estado = { nomes: '', turma: '', itens: {}, feedback: '', respostasLiberadas: false };
+  const itens = Array.from(document.querySelectorAll('input.item'));
+  const barra = document.getElementById('barra');
+  const trilho = document.getElementById('trilho');
+  const txt = document.getElementById('txtProg');
+  const respostas = document.getElementById('respostas');
+  const aviso = document.getElementById('aviso');
+
+  function atualizar() {
+    const feitos = itens.filter((i) => i.checked).length;
+    const pct = Math.round((feitos / itens.length) * 100);
+    barra.style.width = pct + '%';
+    trilho.setAttribute('aria-valuenow', String(pct));
+    txt.textContent = `${feitos} de ${itens.length} itens · ${pct}%` + (pct >= 50 ? ' · respostas liberadas' : '');
+    const liberar = pct >= 50;
+    if (liberar !== estado.respostasLiberadas) {
+      estado.respostasLiberadas = liberar;
+      respostas.style.display = liberar ? 'block' : 'none';
+      aviso.style.display = liberar ? 'none' : 'block';
+      if (liberar) { respostas.classList.remove('revelar'); void respostas.offsetWidth; respostas.classList.add('revelar'); }
+    }
+  }
+
+  itens.forEach((i) => i.addEventListener('change', () => {
+    estado.itens[i.id] = i.checked;
+    const passo = i.closest('.passo');
+    if (passo) passo.classList.toggle('feito', i.checked);
+    atualizar();
+  }));
+  [['nomes', 'nomes'], ['turma', 'turma'], ['feedback', 'feedback']].forEach(([id, chave]) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => { estado[chave] = el.value; });
+  });
+
+  async function copiar(texto) {
+    try { await navigator.clipboard.writeText(texto); return true; }
+    catch {
+      const t = document.createElement('textarea');
+      t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; }
+      t.remove(); return ok;
+    }
+  }
+
+  document.querySelectorAll('.copiar').forEach((b) => b.addEventListener('click', async () => {
+    const codigo = b.closest('.codigo').querySelector('code').textContent;
+    const ok = await copiar(codigo);
+    const antes = b.textContent; b.textContent = ok ? 'Copiado!' : 'Selecione e copie';
+    setTimeout(() => { b.textContent = antes; }, 1600);
+  }));
+
+  document.getElementById('btnResumo').addEventListener('click', async () => {
+    const pendentes = itens.filter((i) => !i.checked).map((i) => i.closest('label').textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    const feitos = itens.length - pendentes.length;
+    const texto = [
+      'Atividade: Rastreando ameaças — auditoria e logs (Programação Back-End, 2ª série, 4º bim., semana 25, aula 3)',
+      `Grupo: ${estado.nomes || '(não informado)'} | Turma: ${estado.turma || '(não informada)'}`,
+      `Progresso: ${feitos}/${itens.length} (${Math.round((feitos / itens.length) * 100)}%)`,
+      pendentes.length ? `Pendentes: ${pendentes.join('; ')}` : 'Todos os itens concluídos.',
+      `Feedback: ${estado.feedback || '(sem feedback)'}`,
+    ].join('\n');
+    const ok = await copiar(texto);
+    document.getElementById('msgResumo').textContent = ok ? 'Resumo copiado — cole na entrega.' : 'Não foi possível copiar automaticamente.';
+  });
+
+  atualizar();
+})();
+</script>
+</body></html>
