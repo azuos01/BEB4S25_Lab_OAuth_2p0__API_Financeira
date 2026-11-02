@@ -1,0 +1,1409 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAuth na API Financeira</title>
+<style>/* Tema escuro (página web) — tokens */
+body.web{
+  --bg:#0e1116; --card:#161b22; --ink:#e6edf3; --muted:#9aa6b2; --line:#2a313c;
+  --acc:#3fb68b; --acc-ink:#0b1f17; --acc-soft:#12352a; --acc-soft-ink:#a7ecd2;
+  --warn:#f0883e; --erro-soft:#3a1a1a; --erro-ink:#ffb4a8;
+  --code-bg:#0a0d12; --code-top:#1c232d; --code-ink:#dbe3ec; --chip:#222a35; --chip-ink:#d0d9e3;
+  --campo:#0f141a; --campo-borda:#3a4452; --quote:#1b2129; --quote-borda:#3a4452; --th:#1d242e;
+  --trilho:#2a313c; --barra-bg:rgba(14,17,22,.92); --amb:#2f3a48; --feito:#132a22; --feito-borda:#2f6f57;
+  color-scheme:dark;
+}
+/* Tema claro (PDF para impressão) */
+body.pdf{
+  --bg:#ffffff; --card:#ffffff; --ink:#1d2433; --muted:#5b6475; --line:#e3ded3;
+  --acc:#0f6e5c; --acc-ink:#ffffff; --acc-soft:#e3f1ec; --acc-soft-ink:#0b4f42;
+  --warn:#a4451b; --erro-soft:#fbeae5; --erro-ink:#7a2a12;
+  --code-bg:#f6f6f4; --code-top:#e8e5dd; --code-ink:#1d2433; --chip:#efe9dc; --chip-ink:#1d2433;
+  --campo:#fff; --campo-borda:#888; --quote:#faf7f0; --quote-borda:#c9bfa8; --th:#f3efe6;
+  --trilho:#e6e1d6; --barra-bg:#fff; --amb:#1d2433; --feito:#fff; --feito-borda:#e3ded3;
+}
+:root{--mono:"Cascadia Code",Consolas,"SFMono-Regular",Menlo,monospace;--sans:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans)}
+main{max-width:920px;margin:0 auto;padding:0 16px 64px}
+a{color:var(--acc)}
+code{font-family:var(--mono);font-size:.88em;background:var(--chip);color:var(--chip-ink);padding:.05em .35em;border-radius:4px;word-break:break-word}
+h1{font-size:clamp(1.6rem,4.5vw,2.3rem);line-height:1.15;margin:.2rem 0 .8rem;letter-spacing:-.01em}
+h2{font-size:1.25rem;margin:0 0 .8rem}
+h3{font-size:1.02rem;margin:1.3rem 0 .5rem}
+h4{font-size:.98rem;margin:0 0 .4rem}
+.titulo-sec{margin:2rem 0 1rem;font-size:1.35rem}
+
+.barra-fixa{position:sticky;top:0;z-index:10;background:var(--barra-bg);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 16px}
+.barra-info{max-width:920px;margin:0 auto 6px;display:flex;justify-content:space-between;gap:12px;font-size:.9rem;flex-wrap:wrap}
+.trilho{position:relative;max-width:920px;margin:0 auto;height:12px;background:var(--trilho);border-radius:99px;overflow:hidden}
+.preenchido{height:100%;width:0;background:linear-gradient(90deg,#1f8a68,#3fb68b);transition:width .35s ease}
+.marco{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--warn);opacity:.8}
+
+.capa{padding:28px 0 8px}
+.sobre{text-transform:uppercase;letter-spacing:.08em;font-size:.78rem;color:var(--acc);font-weight:700;margin:0}
+.chips{list-style:none;padding:0;margin:0 0 1rem;display:flex;flex-wrap:wrap;gap:6px}
+.chips li{background:var(--chip);color:var(--chip-ink);padding:.2rem .65rem;border-radius:99px;font-size:.82rem}
+.intro{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:14px 18px}
+.intro p{margin:.4rem 0}
+.selo{display:inline-block;margin-top:.3rem;font-size:.85rem;background:var(--acc-soft);color:var(--acc-soft-ink);padding:.15rem .55rem;border-radius:6px}
+
+.cartao{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+.grupo label{display:block;font-weight:600;margin:.6rem 0 .25rem;font-size:.92rem}
+input[type=text],textarea{width:100%;padding:.6rem .7rem;font:inherit;color:var(--ink);border:1px solid var(--campo-borda);border-radius:8px;background:var(--campo)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+input[type=text]:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:1px}
+.ctx{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;margin:0}
+.ctx dt{font-weight:700;color:var(--muted);font-size:.9rem}
+.ctx dd{margin:0}
+@media (max-width:620px){.ctx{grid-template-columns:1fr}.ctx dd{margin-bottom:.4rem}}
+blockquote{margin:.6rem 0;padding:.7rem 1rem;background:var(--quote);border-left:4px solid var(--quote-borda);border-radius:6px}
+blockquote cite{display:block;font-size:.8rem;color:var(--muted);margin-top:.3rem;font-style:normal}
+.tab{width:100%;border-collapse:collapse;font-size:.9rem;display:block;overflow-x:auto}
+.tab th,.tab td{border-bottom:1px solid var(--line);padding:.45rem .5rem;text-align:left;vertical-align:top}
+.tab th{background:var(--th)}
+.tab td.num{text-align:right;white-space:nowrap}
+.tab tr.total td{font-weight:700;border-top:2px solid var(--ink)}
+.fluxo{padding-left:1.2rem;font-size:.93rem}
+
+.lista-check{list-style:none;padding:0;margin:0}
+.lista-check li{border-bottom:1px dashed var(--line)}
+.lista-check label{display:flex;gap:12px;align-items:flex-start;padding:.55rem 0;cursor:pointer}
+.lista-check small{display:block;color:var(--muted);font-size:.84rem}
+input.item{width:20px;height:20px;margin:.15rem 0 0;accent-color:var(--acc);flex:none;cursor:pointer}
+.caixa{flex:none;display:inline-grid;place-items:center;width:20px;height:20px;border:2px solid var(--acc);border-radius:4px;font-size:14px;font-weight:700;color:var(--acc-ink);background:var(--acc);margin-top:.15rem}
+
+.passo-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.passo-topo label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;flex:1 1 320px}
+.num{flex:none;font-weight:700;color:var(--acc);font-size:.85rem;padding-top:.1rem;white-space:nowrap}
+.tit{font-weight:700;font-size:1.05rem}
+.amb{background:var(--amb);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:99px;white-space:nowrap}
+.passo.feito{border-color:var(--feito-borda);background:var(--feito)}
+.ok{font-size:.9rem;background:var(--acc-soft);color:var(--acc-soft-ink);padding:.45rem .7rem;border-radius:8px;margin:.8rem 0 0}
+.ok code{background:transparent;color:inherit}
+
+.exemplos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:.8rem}
+@media (max-width:700px){.exemplos{grid-template-columns:1fr}}
+.ex{border-radius:10px;padding:.55rem .75rem;font-size:.86rem;min-width:0}
+.ex h5{margin:0 0 .35rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.ex pre{margin:0;font:.76rem/1.45 var(--mono);white-space:pre-wrap;word-break:break-word}
+.ex p{margin:.45rem 0 0}
+.ex.sucesso{background:var(--acc-soft);color:var(--acc-soft-ink)}
+.ex.falha{background:var(--erro-soft);color:var(--erro-ink)}
+
+.codigo{margin:.7rem 0;border-radius:10px;overflow:hidden;background:var(--code-bg);border:1px solid var(--line)}
+.codigo-topo{display:flex;justify-content:space-between;align-items:center;padding:.35rem .7rem;background:var(--code-top);color:var(--muted);font:600 .78rem var(--mono);gap:8px}
+.codigo pre{margin:0;padding:.8rem 1rem;overflow-x:auto;max-height:520px}
+.codigo code{background:none;color:var(--code-ink);font-size:.8rem;line-height:1.5;padding:0;white-space:pre;word-break:normal}
+.copiar{font:600 .75rem var(--sans);background:#2f3a48;color:#fff;border:0;border-radius:6px;padding:.25rem .65rem;cursor:pointer}
+.copiar:hover{background:#1f8a68}
+details.arq{margin:.6rem 0;border:1px solid var(--line);border-radius:10px;padding:.2rem .7rem}
+details.arq summary{cursor:pointer;padding:.4rem 0}
+details.arq small{color:var(--muted)}
+
+.bloqueio{text-align:center;border-style:dashed;color:var(--muted)}
+.respostas .resp{border-top:1px solid var(--line);padding:.9rem 0}
+.respostas .resp:first-of-type{border-top:0}
+.respostas h3{color:var(--acc);margin-top:1.4rem}
+.respostas.revelar{animation:surgir .5s ease}
+@keyframes surgir{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fontes{padding-left:1.1rem}
+.fontes li{margin:.3rem 0}
+.fontes small{display:block;color:var(--muted);word-break:break-all}
+.acoes{display:flex;gap:12px;align-items:center;margin-top:.7rem;flex-wrap:wrap}
+.acoes button{background:var(--acc);color:var(--acc-ink);border:0;border-radius:8px;padding:.6rem 1rem;font:700 .9rem var(--sans);cursor:pointer}
+#msgResumo{font-size:.88rem;color:var(--acc)}
+
+/* ---------- versão PDF (estática, clara) ---------- */
+body.pdf{font-size:11pt}
+body.pdf .barra-fixa{position:static}
+body.pdf .passo-topo,body.pdf .resp h4,body.pdf h2,body.pdf h3,body.pdf .ex h5{break-after:avoid}
+body.pdf .ex{break-inside:avoid}
+body.pdf .codigo pre{max-height:none;overflow:visible}
+body.pdf .codigo code{white-space:pre-wrap;word-break:break-word;font-size:7.4pt;line-height:1.38}
+body.pdf .tab{display:table}
+body.pdf .fontes a{color:var(--ink);text-decoration:none}
+.linha-preencher{border-bottom:1px solid #888;height:2.1rem;display:flex;align-items:flex-end;padding-bottom:2px;margin-bottom:.3rem}
+.linha-preencher span{font-weight:600}
+.linha-preencher.curta{width:50%}
+.caixa-feedback{border:1px solid #888;border-radius:8px;height:9rem}
+.arq-nome{margin:.8rem 0 .2rem}
+@page{size:A4;margin:14mm 13mm 16mm}
+</style></head><body class="web">
+<div class="barra-fixa" role="region" aria-label="Progresso">
+  <div class="barra-info"><b>Progresso</b><span id="txtProg">0 de 28 itens · 0%</span></div>
+  <div class="trilho" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="trilho"><div class="preenchido" id="barra"></div><div class="marco" title="50%: libera as respostas"></div></div>
+</div>
+<main>
+<header class="capa">
+  <p class="sobre">Roteiro de laboratório · Programação Back-End</p>
+  <h1>Descomplicando o OAuth: autorização segura para APIs</h1>
+  <ul class="chips"><li>2ª série</li><li>4º bimestre</li><li>Semana 25</li><li>Aula 1</li><li>Servidores Web, API e Segurança das Aplicações</li></ul>
+  <section class="intro">
+   <p>Atividade elaborada pelo Prof. Marcos Souza, baseado nos materiais didáticos fornecidos pela Sec. Educ. do Estado de São Paulo para o programa de Educação Profissional Paulista, curso Técnico em Desenvolvimento de Sistemas, na disciplina de Programação Back-End – 2ª série, 4º bimestre, Semana 25, Aula 1, tema “Descomplicando o OAuth: autorização segura para APIs” (unidade Servidores Web, API e Segurança das Aplicações).</p>
+   <p>A ferramenta de inteligência artificial Claude, desenvolvida pela Anthropic, foi utilizada para otimizar esta atividade. <span class="selo">Modelo: Claude Opus 5.5 (claude-opus-5-5) · gerado em 31/10/2026, às 14:20 (horário de Brasília)</span></p>
+  </section>
+</header>
+<section class="cartao grupo"><h2>Integrantes do grupo</h2>
+  <label for="nomes">Nomes dos alunos (2 a 4, separados por vírgula)</label>
+  <input id="nomes" type="text" placeholder="Ex.: Ana Lima, Bruno Costa, Carla Dias" autocomplete="off">
+  <label for="turma">Turma</label><input id="turma" type="text" placeholder="Ex.: 2ª A — DS" autocomplete="off">
+</section>
+<section class="cartao"><h2>Contexto do laboratório</h2><dl class="ctx">
+<dt>Sistema operacional</dt><dd>Windows 10/11 — PowerShell 5.1+ como shell padrão</dd>
+<dt>Ferramentas</dt><dd>Node.js 20 LTS+ (npm 10+), Git 2.40+, Visual Studio Code 1.85+, navegador com DevTools</dd>
+<dt>Dependências npm</dt><dd>Nenhuma — o laboratório usa só módulos nativos do Node (http, crypto, fetch)</dd>
+<dt>Grupos</dt><dd>2 a 4 estudantes por grupo</dd>
+<dt>Duração</dt><dd>2 aulas de 50 min (100 min): 10 estudo · 15 preparação · 40 execução/testes · 25 plano e perguntas · 10 entrega</dd>
+<dt>Objetivo</dt><dd>Implementar e testar, em uma API financeira simulada, o Authorization Code Flow com PKCE, a renovação de tokens e o Client Credentials Flow, e redigir o plano de implementação do grupo.</dd>
+</dl><h3>Cenário</h3><blockquote class="slack">“Time, recebemos uma solicitação urgente do setor de TI: precisamos revisar nosso processo de autorização para a API financeira, garantindo que o fluxo de OAuth esteja devidamente configurado. Como vocês recomendam que ajustemos nossa implementação com base no que discutimos?” <cite>Situação fictícia produzida pela SEDUC-SP</cite></blockquote>
+<h3>Arquitetura do laboratório</h3><table class="tab"><thead><tr><th>Papel OAuth</th><th>Arquivo</th><th>Porta</th><th>Responsabilidade</th></tr></thead><tbody>
+<tr><td>Servidor de Autorização</td><td><code>src/auth-server.js</code></td><td>4000</td><td>Login, consentimento, emissão e revogação de tokens</td></tr>
+<tr><td>Servidor de Recursos (API)</td><td><code>src/api-financeira.js</code></td><td>5000</td><td>Saldo, transações, transferências e relatórios — valida token e escopo</td></tr>
+<tr><td>Cliente (App Finanças)</td><td><code>src/cliente-web.js</code></td><td>3000</td><td>Aplicação web confidencial que pede autorização em nome do usuário</td></tr>
+</tbody></table>
+<ol class="fluxo"><li><b>Cliente</b> redireciona o navegador ao <b>provedor</b> com <code>state</code> e <code>code_challenge</code>.</li>
+<li>Usuário faz login <b>no provedor</b> e consente os escopos.</li><li>Provedor devolve um <b>código</b> de uso único para a redirect URI registrada.</li>
+<li>Back-end do cliente troca código + <code>code_verifier</code> + segredo por <b>access</b> e <b>refresh token</b>.</li>
+<li>Cliente chama a <b>API</b> com <code>Authorization: Bearer</code>; a API valida token e escopo.</li></ol></section>
+<section class="cartao"><h2>Checklist de recursos</h2><ul class="lista-check">
+<li><label><input type="checkbox" class="item" id="i0" data-rotulo="Recurso: Computador com Windows 10/11 e PowerShell 5.1+"><span><b>Computador com Windows 10/11 e PowerShell 5.1+</b><small>Confira com <code>$PSVersionTable.PSVersion</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i1" data-rotulo="Recurso: Node.js 20 LTS ou superior (inclui npm 10+)"><span><b>Node.js 20 LTS ou superior (inclui npm 10+)</b><small><a href='https://nodejs.org/pt/download'>nodejs.org</a> ou <code>winget install OpenJS.NodeJS.LTS</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i2" data-rotulo="Recurso: Git 2.40 ou superior"><span><b>Git 2.40 ou superior</b><small><a href='https://git-scm.com/downloads'>git-scm.com</a> ou <code>winget install Git.Git</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i3" data-rotulo="Recurso: Visual Studio Code 1.85 ou superior"><span><b>Visual Studio Code 1.85 ou superior</b><small><a href='https://code.visualstudio.com/'>code.visualstudio.com</a> ou <code>winget install Microsoft.VisualStudioCode</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i4" data-rotulo="Recurso: Extensão REST Client (humao.rest-client) — opcional"><span><b>Extensão REST Client (humao.rest-client) — opcional</b><small>Executa o arquivo <code>testes/requisicoes.http</code> direto no VS Code</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i5" data-rotulo="Recurso: Navegador atualizado (Edge, Chrome ou Firefox) com DevTools (F12)"><span><b>Navegador atualizado (Edge, Chrome ou Firefox) com DevTools (F12)</b><small>Para observar os redirecionamentos na aba Rede</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i6" data-rotulo="Recurso: Portas 3000, 4000 e 5000 livres"><span><b>Portas 3000, 4000 e 5000 livres</b><small>Se ocupadas, encerre o outro processo antes do <code>npm start</code></small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i7" data-rotulo="Recurso: Arquivo de partida: &lt;code&gt;atividade-oauth-api_script.ps1&lt;/code&gt;"><span><b>Arquivo de partida: <code>atividade-oauth-api_script.ps1</code></b><small>Script de preparação automática do ambiente</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i8" data-rotulo="Recurso: Material de referência SEDUC-SP (roteiro SISANO2C2B4S25A1AP)"><span><b>Material de referência SEDUC-SP (roteiro SISANO2C2B4S25A1AP)</b><small>Conceitos de fluxos, configuração e exemplos práticos de OAuth</small></span></label></li>
+<li><label><input type="checkbox" class="item" id="i9" data-rotulo="Recurso: Modelo do plano: &lt;code&gt;docs/plano-oauth.md&lt;/code&gt;"><span><b>Modelo do plano: <code>docs/plano-oauth.md</code></b><small>Documento que o grupo completa na etapa de Execução</small></span></label></li>
+</ul></section>
+<section><h2 class="titulo-sec">Procedimento passo a passo</h2>
+<article class="cartao passo" id="passo1"><div class="passo-topo"><label><input type="checkbox" class="item" id="i10" data-rotulo="Passo 1"><span class="num">Passo 1</span><span class="tit">Verificar as ferramentas instaladas</span></label><span class="amb">PowerShell</span></div>
+<p>Abra o PowerShell e confira as versões. Se <code>npm -v</code> acusar erro de política de execução, use <code>npm.cmd -v</code> ou rode <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code>node -v          # esperado v20.x ou superior
+npm -v           # esperado 10.x ou superior
+git --version    # esperado 2.40 ou superior
+code --version   # esperado 1.85 ou superior</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Todas as versões aparecem e atendem ao mínimo.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>v22.11.0
+10.9.0
+git version 2.47.1.windows.1
+1.95.3</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>node : O termo &#x27;node&#x27; não é reconhecido como nome de cmdlet...
+npm : O arquivo C:\Program Files\nodejs\npm.ps1 não pode ser carregado...</pre><p><b>Como corrigir:</b> Instale com winget install OpenJS.NodeJS.LTS e reabra o PowerShell; para o erro do npm.ps1 use npm.cmd ou Set-ExecutionPolicy -Scope CurrentUser RemoteSigned.</p></div></div></article>
+<article class="cartao passo" id="passo2"><div class="passo-topo"><label><input type="checkbox" class="item" id="i11" data-rotulo="Passo 2"><span class="num">Passo 2</span><span class="tit">(Opcional) Preparação automática com o script</span></label><span class="amb">PowerShell</span></div>
+<p>O script cria a pasta, grava todos os arquivos, faz o commit inicial, roda os testes, sobe os servidores e abre o navegador — sem perguntas. Cada passo é validado de fato (código de saída, arquivos gerados, respostas HTTP dos servidores, execução do Client Credentials). No fim mostra a tabela passo/ambiente/comando/status, separa o que é automático do que é <b>ação manual do aluno</b>, indica a correção de cada falha e salva tudo em <code>relatorio-preparacao.csv</code> na pasta do projeto. O script nunca faz login, push ou deploy remoto. Quem usar o script confere os arquivos dos passos 3 a 12 no VS Code e marca esses passos; quem preferir fazer à mão segue os passos 3 a 12.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code>cd $HOME\Downloads
+powershell -ExecutionPolicy Bypass -File .\atividade-oauth-api_script.ps1
+# opções: -Destino &quot;C:\outra\pasta&quot;   -SemServidor</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Relatório final sem itens FALHOU (VS Code é opcional).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[OK    ] 1  Node.js &gt;= 20 ... versão 22.11.0
+...
+Sucesso: 19   Falhas: 0   Avisos (opcionais): 0   Pulados: 0   Manuais: 6
+Relatório salvo em ...\relatorio-preparacao.csv</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>... não pode ser carregado porque a execução de scripts foi desabilitada neste sistema.</pre><p><b>Como corrigir:</b> Rode exatamente: powershell -ExecutionPolicy Bypass -File .\atividade-oauth-api_script.ps1 (não precisa ser administrador).</p></div></div></article>
+<article class="cartao passo" id="passo3"><div class="passo-topo"><label><input type="checkbox" class="item" id="i12" data-rotulo="Passo 3"><span class="num">Passo 3</span><span class="tit">Criar a pasta do projeto e o repositório Git</span></label><span class="amb">PowerShell + Git</span></div>
+<p>Crie a estrutura <code>src/</code>, <code>testes/</code> e <code>docs/</code>, inicialize o repositório e abra a pasta no VS Code.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell + Git — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell + Git — comandos">Copiar</button></div><pre><code>$proj = &quot;$HOME\Documents\atividade-oauth-api&quot;
+New-Item -ItemType Directory -Force -Path $proj, &quot;$proj\src&quot;, &quot;$proj\testes&quot;, &quot;$proj\docs&quot; | Out-Null
+cd $proj
+git init -b main
+code .</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> O VS Code abre a pasta vazia com as três subpastas.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Initialized empty Git repository in C:/Users/aluno/Documents/atividade-oauth-api/.git/</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>error: unknown switch `b&#x27;  (Git anterior à 2.28)</pre><p><b>Como corrigir:</b> Atualize o Git (winget upgrade Git.Git) ou use git init seguido de git checkout -b main.</p></div></div></article>
+<article class="cartao passo" id="passo4"><div class="passo-topo"><label><input type="checkbox" class="item" id="i13" data-rotulo="Passo 4"><span class="num">Passo 4</span><span class="tit">Criar package.json, .gitignore e README.md</span></label><span class="amb">VS Code</span></div>
+<p>Na raiz do projeto, crie os três arquivos abaixo. O <code>package.json</code> define os atalhos <code>npm start</code>, <code>npm test</code> e <code>npm run cc</code>; não há dependências a instalar.</p>
+<details class="arq"><summary><code>package.json</code> <small>17 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>package.json</span><button class="copiar" type="button" aria-label="Copiar package.json">Copiar</button></div><pre><code>{
+  &quot;name&quot;: &quot;atividade-oauth-api&quot;,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;description&quot;: &quot;Laboratório OAuth 2.0 — Authorization Code + PKCE, Refresh Token e Client Credentials (Programação Back-End)&quot;,
+  &quot;main&quot;: &quot;src/iniciar.js&quot;,
+  &quot;private&quot;: true,
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;node src/iniciar.js&quot;,
+    &quot;test&quot;: &quot;node testes/teste-fluxo.js&quot;,
+    &quot;cc&quot;: &quot;node src/client-credentials.js&quot;
+  },
+  &quot;engines&quot;: {
+    &quot;node&quot;: &quot;&gt;=20&quot;
+  },
+  &quot;license&quot;: &quot;UNLICENSED&quot;
+}</code></pre></div></details>
+<details class="arq"><summary><code>.gitignore</code> <small>6 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>.gitignore</span><button class="copiar" type="button" aria-label="Copiar .gitignore">Copiar</button></div><pre><code>node_modules/
+.env
+*.log
+.servidor.pid
+relatorio-preparacao.csv</code></pre></div></details>
+<details class="arq"><summary><code>README.md</code> <small>19 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>README.md</span><button class="copiar" type="button" aria-label="Copiar README.md">Copiar</button></div><pre><code># Laboratório OAuth 2.0 — API Financeira
+
+Atividade de Programação Back-End (2ª série, 4º bimestre, semana 25, aula 1). Sem dependências externas: apenas Node.js 20+.
+
+| Papel OAuth | Arquivo | Porta |
+|---|---|---|
+| Servidor de Autorização | `src/auth-server.js` | 4000 |
+| Servidor de Recursos (API) | `src/api-financeira.js` | 5000 |
+| Cliente (App Finanças) | `src/cliente-web.js` | 3000 |
+
+```powershell
+npm test      # testes automáticos de segurança
+npm start     # sobe os três servidores -&gt; abra http://localhost:3000 (aluno / senha123)
+npm run cc    # (outro terminal) demonstração Client Credentials
+$env:ACCESS_TTL=20; npm start   # tokens de 20 s para observar a expiração
+```
+
+Plano de implementação do grupo: `docs/plano-oauth.md`.</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Os três arquivos aparecem no Explorer do VS Code.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Explorer do VS Code: package.json  .gitignore  README.md</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>npm ERR! JSON.parse Unexpected token } in JSON at position 312</pre><p><b>Como corrigir:</b> Algum caractere ficou faltando/sobrando ao copiar o package.json: use o botão Copiar e cole o arquivo inteiro.</p></div></div></article>
+<article class="cartao passo" id="passo5"><div class="passo-topo"><label><input type="checkbox" class="item" id="i14" data-rotulo="Passo 5"><span class="num">Passo 5</span><span class="tit">Registrar a aplicação no provedor (config.js)</span></label><span class="amb">VS Code</span></div>
+<p>Este arquivo simula o <b>registro da aplicação</b> (Material, item 2.2.1): cada cliente tem <code>client_id</code>, segredo, <b>URLs de redirecionamento exatas</b> (item 2.2.2), fluxos permitidos e <b>escopos</b>. O tempo de vida dos tokens (item 2.2.3) também está aqui.</p>
+<details class="arq"><summary><code>src/config.js</code> <small>56 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/config.js</span><button class="copiar" type="button" aria-label="Copiar src/config.js">Copiar</button></div><pre><code>// =============================================================
+// config.js — &quot;Registro da aplicação&quot; no provedor OAuth
+// Equivale ao que se cadastra no console de um provedor real
+// (Google Cloud, Microsoft Entra, Auth0...): client_id, segredo,
+// URLs de redirecionamento permitidas, fluxos e escopos.
+// =============================================================
+const PORTAS = {
+  auth: Number(process.env.AUTH_PORT || 4000),      // Servidor de Autorização
+  api: Number(process.env.API_PORT || 5000),        // Servidor de Recursos (API financeira)
+  cliente: Number(process.env.CLIENT_PORT || 3000), // Aplicação cliente (App Finanças)
+};
+
+module.exports = {
+  PORTAS,
+  EMISSOR: `http://localhost:${PORTAS.auth}`,
+  AUDIENCIA_API: &#x27;api-financeira&#x27;,
+  // Em produção: segredo longo, guardado em variável de ambiente/cofre (NUNCA no Git)
+  SEGREDO_ASSINATURA: process.env.OAUTH_SEGREDO || &#x27;troque-este-segredo-em-producao&#x27;,
+
+  // Tempos de vida (segundos) — tokens de acesso curtos, refresh mais longo
+  ACCESS_TOKEN_TTL: Number(process.env.ACCESS_TTL || 120), // 2 min (didático; real: 5 a 15 min)
+  REFRESH_TOKEN_TTL: Number(process.env.REFRESH_TTL || 1800), // 30 min
+  CODE_TTL: 60, // código de autorização: uso único, vale 60 s
+
+  // Escopos = permissões granulares oferecidas pela API
+  ESCOPOS: {
+    &#x27;saldo:read&#x27;: &#x27;Consultar saldo da conta&#x27;,
+    &#x27;transacoes:read&#x27;: &#x27;Consultar extrato de transações&#x27;,
+    &#x27;transacoes:write&#x27;: &#x27;Criar transferências (operação sensível)&#x27;,
+    &#x27;relatorios:read&#x27;: &#x27;Gerar relatórios consolidados (servidor-servidor)&#x27;,
+  },
+
+  // Aplicações registradas no provedor
+  CLIENTES: [
+    {
+      client_id: &#x27;app-financas-web&#x27;,
+      client_secret: &#x27;segredo-app-web&#x27;, // cliente confidencial: o segredo fica só no back-end
+      nome: &#x27;App Finanças (Web)&#x27;,
+      redirect_uris: [`http://localhost:${PORTAS.cliente}/callback`], // lista exata (sem curingas)
+      grant_types: [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;],
+      escopos_permitidos: [&#x27;saldo:read&#x27;, &#x27;transacoes:read&#x27;, &#x27;transacoes:write&#x27;],
+    },
+    {
+      client_id: &#x27;servico-relatorios&#x27;,
+      client_secret: &#x27;segredo-relatorios&#x27;,
+      nome: &#x27;Serviço de Relatórios (back-end)&#x27;,
+      redirect_uris: [], // sem usuário, sem redirecionamento
+      grant_types: [&#x27;client_credentials&#x27;],
+      escopos_permitidos: [&#x27;relatorios:read&#x27;],
+    },
+  ],
+
+  // Usuário de demonstração (no provedor, nunca no cliente)
+  USUARIOS: [{ id: &#x27;u1&#x27;, login: &#x27;aluno&#x27;, senha: &#x27;senha123&#x27;, nome: &#x27;Aluno(a) Demo&#x27; }],
+};</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você identifica os dois clientes registrados e os quatro escopos.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node -e &quot;console.log(require(&#x27;./src/config&#x27;).CLIENTES.length)&quot;
+2</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Error: Cannot find module &#x27;./src/config&#x27;</pre><p><b>Como corrigir:</b> Confira se o arquivo está em src\config.js (e não em src\config.js.txt) e se o terminal está na raiz do projeto.</p></div></div></article>
+<article class="cartao passo" id="passo6"><div class="passo-topo"><label><input type="checkbox" class="item" id="i15" data-rotulo="Passo 6"><span class="num">Passo 6</span><span class="tit">Criar os utilitários HTTP e de JWT</span></label><span class="amb">VS Code</span></div>
+<p><code>util.js</code> reúne funções de HTTP, geração de valores aleatórios e SHA-256 (usado no PKCE). <code>jwt.js</code> assina e valida tokens JWT HS256 com comparação em tempo constante.</p>
+<details class="arq"><summary><code>src/util.js</code> <small>80 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/util.js</span><button class="copiar" type="button" aria-label="Copiar src/util.js">Copiar</button></div><pre><code>// =============================================================
+// util.js — Funções auxiliares HTTP (somente módulos nativos)
+// =============================================================
+const crypto = require(&#x27;node:crypto&#x27;);
+
+function lerCorpo(req) {
+  return new Promise((resolve, reject) =&gt; {
+    let dados = &#x27;&#x27;;
+    req.on(&#x27;data&#x27;, (parte) =&gt; {
+      dados += parte;
+      if (dados.length &gt; 1e6) req.destroy(); // limite de 1 MB
+    });
+    req.on(&#x27;end&#x27;, () =&gt; {
+      try {
+        const tipo = req.headers[&#x27;content-type&#x27;] || &#x27;&#x27;;
+        if (tipo.includes(&#x27;application/json&#x27;)) return resolve(dados ? JSON.parse(dados) : {});
+        resolve(Object.fromEntries(new URLSearchParams(dados)));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on(&#x27;error&#x27;, reject);
+  });
+}
+
+function json(res, status, obj, extras = {}) {
+  res.writeHead(status, { &#x27;Content-Type&#x27;: &#x27;application/json; charset=utf-8&#x27;, &#x27;Cache-Control&#x27;: &#x27;no-store&#x27;, ...extras });
+  res.end(JSON.stringify(obj, null, 2));
+}
+
+function html(res, status, corpo, extras = {}) {
+  res.writeHead(status, { &#x27;Content-Type&#x27;: &#x27;text/html; charset=utf-8&#x27;, &#x27;Cache-Control&#x27;: &#x27;no-store&#x27;, ...extras });
+  res.end(corpo);
+}
+
+function redirecionar(res, url) {
+  res.writeHead(302, { Location: url });
+  res.end();
+}
+
+function lerCookies(req) {
+  return Object.fromEntries(
+    (req.headers.cookie || &#x27;&#x27;).split(&#x27;;&#x27;).filter((c) =&gt; c.includes(&#x27;=&#x27;)).map((c) =&gt; {
+      const i = c.indexOf(&#x27;=&#x27;);
+      return [c.slice(0, i).trim(), decodeURIComponent(c.slice(i + 1).trim())];
+    })
+  );
+}
+
+const aleatorio = (bytes = 32) =&gt; crypto.randomBytes(bytes).toString(&#x27;base64url&#x27;);
+const sha256b64url = (texto) =&gt; crypto.createHash(&#x27;sha256&#x27;).update(texto).digest(&#x27;base64url&#x27;);
+
+function iguaisSeguro(a, b) {
+  const x = Buffer.from(String(a ?? &#x27;&#x27;));
+  const y = Buffer.from(String(b ?? &#x27;&#x27;));
+  return x.length === y.length &amp;&amp; crypto.timingSafeEqual(x, y);
+}
+
+const esc = (s) =&gt;
+  String(s ?? &#x27;&#x27;).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g, (c) =&gt; ({ &#x27;&amp;&#x27;: &#x27;&amp;amp;&#x27;, &#x27;&lt;&#x27;: &#x27;&amp;lt;&#x27;, &#x27;&gt;&#x27;: &#x27;&amp;gt;&#x27;, &#x27;&quot;&#x27;: &#x27;&amp;quot;&#x27;, &quot;&#x27;&quot;: &#x27;&amp;#39;&#x27; }[c]));
+
+function pagina(titulo, corpo, cor = &#x27;#2563eb&#x27;) {
+  return `&lt;!doctype html&gt;&lt;html lang=&quot;pt-BR&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;title&gt;${esc(titulo)}&lt;/title&gt;
+&lt;style&gt;
+ body{font-family:system-ui,Segoe UI,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#1f2937;background:#f8fafc}
+ .tag{display:inline-block;background:${cor};color:#fff;padding:.2rem .6rem;border-radius:99px;font-size:.8rem}
+ h1{margin:.4rem 0 1rem} h2{font-size:1.05rem;margin-top:1.6rem}
+ pre{background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:8px;overflow:auto;font-size:.85rem}
+ .btn,button{display:inline-block;background:${cor};color:#fff;border:0;padding:.55rem .9rem;border-radius:6px;
+   text-decoration:none;font-size:.9rem;cursor:pointer;margin:.2rem .2rem .2rem 0}
+ .sec{background:#475569} .perigo{background:#b91c1c}
+ form{display:inline} label{display:block;margin:.5rem 0} input{padding:.45rem;border:1px solid #cbd5e1;border-radius:6px}
+ form.bloco{display:block;background:#fff;padding:1rem;border-radius:8px;border:1px solid #e2e8f0}
+ .erro{color:#b91c1c;font-weight:600} .dica{font-size:.85rem;color:#475569} ol li{margin:.25rem 0;font-size:.9rem}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;${corpo}&lt;/body&gt;&lt;/html&gt;`;
+}
+
+module.exports = { lerCorpo, json, html, redirecionar, lerCookies, aleatorio, sha256b64url, iguaisSeguro, esc, pagina };</code></pre></div></details>
+<details class="arq"><summary><code>src/jwt.js</code> <small>42 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/jwt.js</span><button class="copiar" type="button" aria-label="Copiar src/jwt.js">Copiar</button></div><pre><code>// =============================================================
+// jwt.js — Assinatura e validação de JWT (HS256) sem bibliotecas
+// Em produção prefira bibliotecas consolidadas (ex.: &quot;jose&quot;) e
+// assinatura assimétrica (RS256/ES256) publicada via JWKS.
+// =============================================================
+const crypto = require(&#x27;node:crypto&#x27;);
+
+const b64 = (obj) =&gt; Buffer.from(JSON.stringify(obj)).toString(&#x27;base64url&#x27;);
+const hmac = (dados, segredo) =&gt; crypto.createHmac(&#x27;sha256&#x27;, segredo).update(dados).digest(&#x27;base64url&#x27;);
+
+function assinar(payload, segredo) {
+  const cabecalho = b64({ alg: &#x27;HS256&#x27;, typ: &#x27;JWT&#x27; });
+  const corpo = b64(payload);
+  return `${cabecalho}.${corpo}.${hmac(`${cabecalho}.${corpo}`, segredo)}`;
+}
+
+function verificar(token, segredo) {
+  const partes = String(token || &#x27;&#x27;).split(&#x27;.&#x27;);
+  if (partes.length !== 3) throw new Error(&#x27;token malformado&#x27;);
+  const [cabecalho, corpo, assinatura] = partes;
+  const esperado = Buffer.from(hmac(`${cabecalho}.${corpo}`, segredo));
+  const recebido = Buffer.from(assinatura);
+  // comparação em tempo constante (evita ataque de temporização)
+  if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) {
+    throw new Error(&#x27;assinatura invalida (token adulterado ou de outro emissor)&#x27;);
+  }
+  const payload = JSON.parse(Buffer.from(corpo, &#x27;base64url&#x27;).toString());
+  if (!payload.exp || Math.floor(Date.now() / 1000) &gt;= payload.exp) throw new Error(&#x27;token expirado&#x27;);
+  return payload;
+}
+
+// Apenas lê as claims (NÃO valida) — usado pelo cliente para exibir na tela
+function decodificar(token) {
+  try {
+    return JSON.parse(Buffer.from(String(token).split(&#x27;.&#x27;)[1], &#x27;base64url&#x27;).toString());
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { assinar, verificar, decodificar };</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Arquivos salvos sem erros de sintaxe (sem sublinhado vermelho).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\util.js; node --check src\jwt.js   (sem saída = sem erro de sintaxe)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>src\jwt.js:12
+  return `${cabecalho}.${corpo}.${hmac(...)
+SyntaxError: Unterminated template literal</pre><p><b>Como corrigir:</b> A crase de fechamento (`) se perdeu ao copiar; copie o arquivo novamente pelo botão Copiar.</p></div></div></article>
+<article class="cartao passo" id="passo7"><div class="passo-topo"><label><input type="checkbox" class="item" id="i16" data-rotulo="Passo 7"><span class="num">Passo 7</span><span class="tit">Criar o Servidor de Autorização</span></label><span class="amb">VS Code</span></div>
+<p>Endpoints: <code>GET/POST /authorize</code> (login e consentimento, com validação de <code>redirect_uri</code>, escopo, <code>state</code> e PKCE), <code>POST /token</code> (authorization_code, refresh_token com rotação e client_credentials), <code>POST /revoke</code> e <code>/.well-known/oauth-authorization-server</code>.</p>
+<details class="arq"><summary><code>src/auth-server.js</code> <small>240 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/auth-server.js</span><button class="copiar" type="button" aria-label="Copiar src/auth-server.js">Copiar</button></div><pre><code>// =============================================================
+// auth-server.js — SERVIDOR DE AUTORIZAÇÃO (porta 4000)
+// Implementa: Authorization Code + PKCE, Refresh Token (com
+// rotação e detecção de reuso), Client Credentials e revogação.
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCorpo, json, html, redirecionar, aleatorio, sha256b64url, iguaisSeguro, esc, pagina } = require(&#x27;./util&#x27;);
+
+const codigos = new Map(); // code -&gt; { client_id, redirect_uri, escopos, sub, code_challenge, exp }
+const refreshTokens = new Map(); // refresh -&gt; { sub, client_id, escopos, exp, familia }
+const refreshUsados = new Map(); // refresh já trocado -&gt; familia (para detectar reuso)
+
+const agora = () =&gt; Math.floor(Date.now() / 1000);
+const buscarCliente = (id) =&gt; cfg.CLIENTES.find((c) =&gt; c.client_id === id);
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[auth]&#x27;, ...a); };
+
+function validarEscopo(cliente, scope) {
+  const pedidos = String(scope || &#x27;&#x27;).split(&#x27; &#x27;).filter(Boolean);
+  if (!pedidos.length) return null;
+  return pedidos.every((e) =&gt; cliente.escopos_permitidos.includes(e)) ? pedidos : null;
+}
+
+function autenticarCliente(req, corpo) {
+  let id = corpo.client_id;
+  let segredo = corpo.client_secret;
+  const auth = req.headers.authorization || &#x27;&#x27;;
+  if (auth.startsWith(&#x27;Basic &#x27;)) {
+    const [i, s] = Buffer.from(auth.slice(6), &#x27;base64&#x27;).toString().split(&#x27;:&#x27;);
+    id = decodeURIComponent(i || &#x27;&#x27;);
+    segredo = decodeURIComponent(s || &#x27;&#x27;);
+  }
+  const cliente = buscarCliente(id);
+  return cliente &amp;&amp; iguaisSeguro(cliente.client_secret, segredo) ? cliente : null;
+}
+
+function emitirAccessToken(sub, client_id, escopos) {
+  const iat = agora();
+  return jwt.assinar(
+    { iss: cfg.EMISSOR, aud: cfg.AUDIENCIA_API, sub, client_id, scope: escopos.join(&#x27; &#x27;), iat, exp: iat + cfg.ACCESS_TOKEN_TTL, jti: aleatorio(8) },
+    cfg.SEGREDO_ASSINATURA
+  );
+}
+
+function emitirTokens(sub, client_id, escopos, comRefresh, familia = aleatorio(8)) {
+  const r = { access_token: emitirAccessToken(sub, client_id, escopos), token_type: &#x27;Bearer&#x27;, expires_in: cfg.ACCESS_TOKEN_TTL, scope: escopos.join(&#x27; &#x27;) };
+  if (comRefresh) {
+    r.refresh_token = aleatorio(32); // opaco: só o provedor sabe o que significa
+    r.refresh_expires_in = cfg.REFRESH_TOKEN_TTL;
+    refreshTokens.set(r.refresh_token, { sub, client_id, escopos, exp: agora() + cfg.REFRESH_TOKEN_TTL, familia });
+  }
+  return r;
+}
+
+function revogarFamilia(familia) {
+  for (const [token, d] of refreshTokens) if (d.familia === familia) refreshTokens.delete(token);
+}
+
+// ---------- /authorize -------------------------------------------------
+function validarPedido(p) {
+  const cliente = buscarCliente(p.client_id);
+  if (!cliente) return { fatal: &#x27;client_id desconhecido: a aplicação não está registrada no provedor.&#x27; };
+  if (!cliente.redirect_uris.includes(p.redirect_uri)) {
+    return { fatal: `redirect_uri não registrada para &quot;${cliente.client_id}&quot;: ${p.redirect_uri}. Por segurança o provedor NÃO redireciona para URLs desconhecidas (evita roubo do código).` };
+  }
+  const erro = (error, error_description) =&gt; ({ cliente, erro: { error, error_description } });
+  if (!cliente.grant_types.includes(&#x27;authorization_code&#x27;)) return erro(&#x27;unauthorized_client&#x27;, &#x27;Cliente não habilitado para o Authorization Code Flow.&#x27;);
+  if (p.response_type !== &#x27;code&#x27;) return erro(&#x27;unsupported_response_type&#x27;, &#x27;Use response_type=code. O Implicit Flow (response_type=token) é desaconselhado pelas boas práticas atuais.&#x27;);
+  const escopos = validarEscopo(cliente, p.scope);
+  if (!escopos) return erro(&#x27;invalid_scope&#x27;, &#x27;Escopo ausente ou não permitido para este cliente.&#x27;);
+  if (!p.code_challenge || p.code_challenge_method !== &#x27;S256&#x27;) return erro(&#x27;invalid_request&#x27;, &#x27;PKCE obrigatório: envie code_challenge com code_challenge_method=S256.&#x27;);
+  if (!p.state) return erro(&#x27;invalid_request&#x27;, &#x27;Parâmetro state obrigatório (proteção contra CSRF).&#x27;);
+  return { cliente, escopos };
+}
+
+function voltarComErro(res, p, erro) {
+  const u = new URL(p.redirect_uri);
+  u.searchParams.set(&#x27;error&#x27;, erro.error);
+  u.searchParams.set(&#x27;error_description&#x27;, erro.error_description);
+  if (p.state) u.searchParams.set(&#x27;state&#x27;, p.state);
+  redirecionar(res, u.toString());
+}
+
+function paginaErro(msg) {
+  return pagina(&#x27;Provedor OAuth — erro&#x27;, `&lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+  &lt;h1&gt;Pedido de autorização recusado&lt;/h1&gt;&lt;p class=&quot;erro&quot;&gt;${esc(msg)}&lt;/p&gt;
+  &lt;a class=&quot;btn sec&quot; href=&quot;http://localhost:${cfg.PORTAS.cliente}/&quot;&gt;Voltar ao App Finanças&lt;/a&gt;`, &#x27;#7c3aed&#x27;);
+}
+
+function telaConsentimento(p, cliente, escopos, mensagem = &#x27;&#x27;) {
+  const campos = [&#x27;client_id&#x27;, &#x27;redirect_uri&#x27;, &#x27;response_type&#x27;, &#x27;scope&#x27;, &#x27;state&#x27;, &#x27;code_challenge&#x27;, &#x27;code_challenge_method&#x27;]
+    .map((k) =&gt; `&lt;input type=&quot;hidden&quot; name=&quot;${k}&quot; value=&quot;${esc(p[k])}&quot;&gt;`).join(&#x27;&#x27;);
+  return pagina(&#x27;Provedor OAuth — login e consentimento&#x27;, `
+  &lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+  &lt;h1&gt;Entrar no Provedor OAuth&lt;/h1&gt;
+  &lt;p&gt;A aplicação &lt;b&gt;${esc(cliente.nome)}&lt;/b&gt; (&lt;code&gt;${esc(cliente.client_id)}&lt;/code&gt;) solicita acesso a:&lt;/p&gt;
+  &lt;ul&gt;${escopos.map((e) =&gt; `&lt;li&gt;&lt;code&gt;${esc(e)}&lt;/code&gt; — ${esc(cfg.ESCOPOS[e] || &#x27;&#x27;)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ul&gt;
+  ${mensagem ? `&lt;p class=&quot;erro&quot;&gt;${esc(mensagem)}&lt;/p&gt;` : &#x27;&#x27;}
+  &lt;form method=&quot;post&quot; action=&quot;/authorize&quot; class=&quot;bloco&quot;&gt;${campos}
+    &lt;label&gt;Usuário &lt;input name=&quot;login&quot; value=&quot;aluno&quot; autocomplete=&quot;username&quot;&gt;&lt;/label&gt;
+    &lt;label&gt;Senha &lt;input name=&quot;senha&quot; type=&quot;password&quot; placeholder=&quot;senha123&quot; autocomplete=&quot;current-password&quot;&gt;&lt;/label&gt;
+    &lt;p class=&quot;dica&quot;&gt;A senha é digitada &lt;b&gt;somente aqui, no provedor&lt;/b&gt;. O App Finanças nunca a recebe.&lt;/p&gt;
+    &lt;button name=&quot;decisao&quot; value=&quot;permitir&quot;&gt;Permitir acesso&lt;/button&gt;
+    &lt;button name=&quot;decisao&quot; value=&quot;negar&quot; class=&quot;sec&quot;&gt;Negar&lt;/button&gt;
+  &lt;/form&gt;`, &#x27;#7c3aed&#x27;);
+}
+
+function getAuthorize(res, url) {
+  const p = Object.fromEntries(url.searchParams);
+  const v = validarPedido(p);
+  if (v.fatal) return html(res, 400, paginaErro(v.fatal));
+  if (v.erro) return voltarComErro(res, p, v.erro);
+  html(res, 200, telaConsentimento(p, v.cliente, v.escopos));
+}
+
+async function postAuthorize(req, res) {
+  const p = await lerCorpo(req);
+  const v = validarPedido(p);
+  if (v.fatal) return html(res, 400, paginaErro(v.fatal));
+  if (v.erro) return voltarComErro(res, p, v.erro);
+  if (p.decisao === &#x27;negar&#x27;) return voltarComErro(res, p, { error: &#x27;access_denied&#x27;, error_description: &#x27;O usuário negou o acesso.&#x27; });
+  const usuario = cfg.USUARIOS.find((u) =&gt; u.login === p.login &amp;&amp; iguaisSeguro(u.senha, p.senha));
+  if (!usuario) return html(res, 401, telaConsentimento(p, v.cliente, v.escopos, &#x27;Usuário ou senha inválidos.&#x27;));
+  const code = aleatorio(24);
+  codigos.set(code, { client_id: p.client_id, redirect_uri: p.redirect_uri, escopos: v.escopos, sub: usuario.id, code_challenge: p.code_challenge, exp: agora() + cfg.CODE_TTL });
+  log(`código emitido para ${p.client_id} (usuário ${usuario.login}, escopos: ${v.escopos.join(&#x27; &#x27;)})`);
+  const u = new URL(p.redirect_uri);
+  u.searchParams.set(&#x27;code&#x27;, code);
+  u.searchParams.set(&#x27;state&#x27;, p.state);
+  redirecionar(res, u.toString());
+}
+
+// ---------- /token -----------------------------------------------------
+async function postToken(req, res) {
+  const corpo = await lerCorpo(req);
+  const erroGrant = (d) =&gt; json(res, 400, { error: &#x27;invalid_grant&#x27;, error_description: d });
+  const suportados = [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;, &#x27;client_credentials&#x27;];
+  if (!suportados.includes(corpo.grant_type)) return json(res, 400, { error: &#x27;unsupported_grant_type&#x27;, error_description: `Use: ${suportados.join(&#x27;, &#x27;)}` });
+
+  const cliente = autenticarCliente(req, corpo);
+  if (!cliente) return json(res, 401, { error: &#x27;invalid_client&#x27;, error_description: &#x27;Falha na autenticação do cliente (client_id/client_secret).&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Basic realm=&quot;oauth&quot;&#x27; });
+  if (!cliente.grant_types.includes(corpo.grant_type)) return json(res, 400, { error: &#x27;unauthorized_client&#x27;, error_description: `Cliente não habilitado para ${corpo.grant_type}.` });
+
+  if (corpo.grant_type === &#x27;authorization_code&#x27;) {
+    const d = codigos.get(corpo.code);
+    codigos.delete(corpo.code); // uso único — descartado mesmo se a troca falhar
+    if (!d || d.exp &lt; agora()) return erroGrant(&#x27;Código inválido, expirado ou já utilizado.&#x27;);
+    if (d.client_id !== cliente.client_id) return erroGrant(&#x27;Código emitido para outro cliente.&#x27;);
+    if (d.redirect_uri !== corpo.redirect_uri) return erroGrant(&#x27;redirect_uri diferente da usada na autorização.&#x27;);
+    if (!corpo.code_verifier || sha256b64url(corpo.code_verifier) !== d.code_challenge) return erroGrant(&#x27;PKCE: code_verifier não confere com o code_challenge.&#x27;);
+    log(`tokens emitidos (authorization_code) para ${cliente.client_id}`);
+    return json(res, 200, emitirTokens(d.sub, cliente.client_id, d.escopos, true));
+  }
+
+  if (corpo.grant_type === &#x27;refresh_token&#x27;) {
+    const rt = corpo.refresh_token;
+    if (refreshUsados.has(rt)) {
+      revogarFamilia(refreshUsados.get(rt));
+      log(&#x27;ALERTA: reuso de refresh token — família revogada&#x27;);
+      return erroGrant(&#x27;REUSO de refresh token detectado: todos os tokens desta sessão foram revogados. Faça login novamente.&#x27;);
+    }
+    const d = refreshTokens.get(rt);
+    if (!d || d.client_id !== cliente.client_id) return erroGrant(&#x27;Refresh token inválido ou revogado.&#x27;);
+    if (d.exp &lt; agora()) {
+      refreshTokens.delete(rt);
+      return erroGrant(&#x27;Refresh token expirado: faça login novamente.&#x27;);
+    }
+    refreshTokens.delete(rt); // ROTAÇÃO: o antigo deixa de valer...
+    refreshUsados.set(rt, d.familia); // ...e passa a ser vigiado
+    log(`tokens renovados (refresh_token) para ${cliente.client_id}`);
+    return json(res, 200, emitirTokens(d.sub, cliente.client_id, d.escopos, true, d.familia));
+  }
+
+  // client_credentials: a aplicação age em nome PRÓPRIO (sem usuário, sem refresh)
+  const escopos = validarEscopo(cliente, corpo.scope || cliente.escopos_permitidos.join(&#x27; &#x27;));
+  if (!escopos) return json(res, 400, { error: &#x27;invalid_scope&#x27;, error_description: &#x27;Escopo não permitido para este cliente.&#x27; });
+  log(`token emitido (client_credentials) para ${cliente.client_id}`);
+  return json(res, 200, emitirTokens(cliente.client_id, cliente.client_id, escopos, false));
+}
+
+// ---------- /revoke (RFC 7009) -----------------------------------------
+async function postRevoke(req, res) {
+  const corpo = await lerCorpo(req);
+  if (!autenticarCliente(req, corpo)) return json(res, 401, { error: &#x27;invalid_client&#x27; });
+  const d = refreshTokens.get(corpo.token);
+  if (d) revogarFamilia(d.familia);
+  json(res, 200, { revogado: true }); // responde 200 mesmo se o token não existir
+}
+
+function metadados() {
+  const e = cfg.EMISSOR;
+  return {
+    issuer: e,
+    authorization_endpoint: `${e}/authorize`,
+    token_endpoint: `${e}/token`,
+    revocation_endpoint: `${e}/revoke`,
+    response_types_supported: [&#x27;code&#x27;],
+    grant_types_supported: [&#x27;authorization_code&#x27;, &#x27;refresh_token&#x27;, &#x27;client_credentials&#x27;],
+    code_challenge_methods_supported: [&#x27;S256&#x27;],
+    token_endpoint_auth_methods_supported: [&#x27;client_secret_basic&#x27;, &#x27;client_secret_post&#x27;],
+    scopes_supported: Object.keys(cfg.ESCOPOS),
+  };
+}
+
+function criarServidor() {
+  return http.createServer(async (req, res) =&gt; {
+    const url = new URL(req.url, cfg.EMISSOR);
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/authorize&#x27;) return getAuthorize(res, url);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/authorize&#x27;) return await postAuthorize(req, res);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/token&#x27;) return await postToken(req, res);
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/revoke&#x27;) return await postRevoke(req, res);
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/.well-known/oauth-authorization-server&#x27;) return json(res, 200, metadados());
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) {
+        const lista = cfg.CLIENTES.map((c) =&gt; ({ client_id: c.client_id, nome: c.nome, redirect_uris: c.redirect_uris, grant_types: c.grant_types, escopos_permitidos: c.escopos_permitidos }));
+        return html(res, 200, pagina(&#x27;Provedor OAuth&#x27;, `&lt;p class=&quot;tag&quot;&gt;Servidor de Autorização · porta ${cfg.PORTAS.auth}&lt;/p&gt;
+          &lt;h1&gt;Provedor OAuth (didático)&lt;/h1&gt;&lt;h2&gt;Aplicações registradas (segredos ocultos)&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(lista, null, 2))}&lt;/pre&gt;
+          &lt;h2&gt;Metadados&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(metadados(), null, 2))}&lt;/pre&gt;`, &#x27;#7c3aed&#x27;));
+      }
+      json(res, 404, { error: &#x27;not_found&#x27; });
+    } catch (e) {
+      console.error(&#x27;[auth] erro:&#x27;, e);
+      json(res, 500, { error: &#x27;server_error&#x27;, error_description: e.message });
+    }
+  });
+}
+
+function iniciar(porta = cfg.PORTAS.auth) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`Servidor de Autorização em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você localiza no código onde o código de autorização vira uso único.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\auth-server.js   (sem saída)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>SyntaxError: Unexpected end of input</pre><p><b>Como corrigir:</b> O arquivo foi colado incompleto: confira a última linha (module.exports = { iniciar };).</p></div></div></article>
+<article class="cartao passo" id="passo8"><div class="passo-topo"><label><input type="checkbox" class="item" id="i17" data-rotulo="Passo 8"><span class="num">Passo 8</span><span class="tit">Criar a API Financeira (servidor de recursos)</span></label><span class="amb">VS Code</span></div>
+<p>A função <code>autorizar()</code> valida assinatura, expiração, emissor (<code>iss</code>), audiência (<code>aud</code>) e o escopo exigido por rota. Responde <b>401</b> para token ausente/inválido e <b>403</b> para escopo insuficiente.</p>
+<details class="arq"><summary><code>src/api-financeira.js</code> <small>99 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/api-financeira.js</span><button class="copiar" type="button" aria-label="Copiar src/api-financeira.js">Copiar</button></div><pre><code>// =============================================================
+// api-financeira.js — SERVIDOR DE RECURSOS (porta 5000)
+// Valida o access token (assinatura, expiração, emissor,
+// audiência) e exige o ESCOPO certo para cada rota.
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCorpo, json } = require(&#x27;./util&#x27;);
+
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[api]&#x27;, ...a); };
+
+const contas = {
+  u1: {
+    saldo: 2350.75,
+    transacoes: [
+      { id: 1, data: &#x27;2026-10-01&#x27;, descricao: &#x27;Salário&#x27;, valor: 3200.0 },
+      { id: 2, data: &#x27;2026-10-05&#x27;, descricao: &#x27;Aluguel&#x27;, valor: -1100.0 },
+      { id: 3, data: &#x27;2026-10-12&#x27;, descricao: &#x27;Supermercado&#x27;, valor: -412.35 },
+      { id: 4, data: &#x27;2026-10-20&#x27;, descricao: &#x27;Conta de energia&#x27;, valor: -186.9 },
+      { id: 5, data: &#x27;2026-10-28&#x27;, descricao: &#x27;Pix recebido&#x27;, valor: 850.0 },
+    ],
+  },
+};
+
+// Middleware de autorização: devolve as claims ou responde 401/403
+function autorizar(req, res, escopoExigido) {
+  const auth = req.headers.authorization || &#x27;&#x27;;
+  if (!auth.startsWith(&#x27;Bearer &#x27;)) {
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: &#x27;Envie o cabeçalho Authorization: Bearer &lt;access_token&gt;.&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer realm=&quot;api-financeira&quot;&#x27; });
+    return null;
+  }
+  let claims;
+  try {
+    claims = jwt.verificar(auth.slice(7), cfg.SEGREDO_ASSINATURA);
+  } catch (e) {
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: e.message }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer realm=&quot;api-financeira&quot;, error=&quot;invalid_token&quot;&#x27; });
+    return null;
+  }
+  if (claims.iss !== cfg.EMISSOR || claims.aud !== cfg.AUDIENCIA_API) {
+    json(res, 401, { error: &#x27;invalid_token&#x27;, error_description: &#x27;Emissor (iss) ou audiência (aud) inválidos.&#x27; }, { &#x27;WWW-Authenticate&#x27;: &#x27;Bearer error=&quot;invalid_token&quot;&#x27; });
+    return null;
+  }
+  const escopos = String(claims.scope || &#x27;&#x27;).split(&#x27; &#x27;);
+  if (!escopos.includes(escopoExigido)) {
+    json(res, 403, { error: &#x27;insufficient_scope&#x27;, error_description: `Este recurso exige o escopo &quot;${escopoExigido}&quot;.`, escopos_do_token: escopos },
+      { &#x27;WWW-Authenticate&#x27;: `Bearer error=&quot;insufficient_scope&quot;, scope=&quot;${escopoExigido}&quot;` });
+    return null;
+  }
+  return claims;
+}
+
+function criarServidor() {
+  return http.createServer(async (req, res) =&gt; {
+    const url = new URL(req.url, `http://localhost:${cfg.PORTAS.api}`);
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) {
+        return json(res, 200, { api: &#x27;API Financeira (didática)&#x27;, rotas: { &#x27;GET /saldo&#x27;: &#x27;saldo:read&#x27;, &#x27;GET /transacoes&#x27;: &#x27;transacoes:read&#x27;, &#x27;POST /transferencias&#x27;: &#x27;transacoes:write&#x27;, &#x27;GET /relatorios/resumo&#x27;: &#x27;relatorios:read&#x27; } });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/saldo&#x27;) {
+        const c = autorizar(req, res, &#x27;saldo:read&#x27;); if (!c) return;
+        return json(res, 200, { usuario: c.sub, saldo: contas[c.sub]?.saldo ?? 0, moeda: &#x27;BRL&#x27; });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/transacoes&#x27;) {
+        const c = autorizar(req, res, &#x27;transacoes:read&#x27;); if (!c) return;
+        return json(res, 200, { usuario: c.sub, transacoes: contas[c.sub]?.transacoes ?? [] });
+      }
+      if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/transferencias&#x27;) {
+        const c = autorizar(req, res, &#x27;transacoes:write&#x27;); if (!c) return;
+        const corpo = await lerCorpo(req);
+        return json(res, 201, { status: &#x27;transferência registrada&#x27;, usuario: c.sub, ...corpo });
+      }
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/relatorios/resumo&#x27;) {
+        const c = autorizar(req, res, &#x27;relatorios:read&#x27;); if (!c) return;
+        const todas = Object.values(contas).flatMap((x) =&gt; x.transacoes);
+        const entradas = todas.filter((t) =&gt; t.valor &gt; 0).reduce((s, t) =&gt; s + t.valor, 0);
+        const saidas = todas.filter((t) =&gt; t.valor &lt; 0).reduce((s, t) =&gt; s + t.valor, 0);
+        return json(res, 200, { solicitante: c.sub, periodo: &#x27;2026-10&#x27;, entradas, saidas: Math.abs(saidas), quantidade: todas.length });
+      }
+      json(res, 404, { error: &#x27;not_found&#x27; });
+    } catch (e) {
+      console.error(&#x27;[api] erro:&#x27;, e);
+      json(res, 500, { error: &#x27;server_error&#x27; });
+    }
+  });
+}
+
+function iniciar(porta = cfg.PORTAS.api) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`API Financeira em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Você sabe qual escopo cada rota exige.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\api-financeira.js   (sem saída)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>ReferenceError: jwt is not defined</pre><p><b>Como corrigir:</b> Falta a linha const jwt = require(&#x27;./jwt&#x27;); no topo do arquivo.</p></div></div></article>
+<article class="cartao passo" id="passo9"><div class="passo-topo"><label><input type="checkbox" class="item" id="i18" data-rotulo="Passo 9"><span class="num">Passo 9</span><span class="tit">Criar o cliente App Finanças e os scripts de início</span></label><span class="amb">VS Code</span></div>
+<p><code>cliente-web.js</code> é um cliente <b>confidencial</b>: guarda segredo, <code>code_verifier</code> e tokens no servidor; o navegador recebe só um cookie HttpOnly. Pede apenas <code>saldo:read transacoes:read</code> (menor privilégio). <code>iniciar.js</code> sobe os três servidores; <code>client-credentials.js</code> demonstra o fluxo servidor-servidor.</p>
+<details class="arq"><summary><code>src/cliente-web.js</code> <small>177 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/cliente-web.js</span><button class="copiar" type="button" aria-label="Copiar src/cliente-web.js">Copiar</button></div><pre><code>// =============================================================
+// cliente-web.js — APLICAÇÃO CLIENTE &quot;App Finanças&quot; (porta 3000)
+// Cliente confidencial: o back-end guarda client_secret, tokens e
+// code_verifier; o navegador recebe apenas um cookie de sessão.
+// =============================================================
+const http = require(&#x27;node:http&#x27;);
+const cfg = require(&#x27;./config&#x27;);
+const jwt = require(&#x27;./jwt&#x27;);
+const { lerCookies, html, redirecionar, aleatorio, sha256b64url, esc, pagina } = require(&#x27;./util&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const CLIENTE = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;app-financas-web&#x27;);
+const REDIRECT_URI = CLIENTE.redirect_uris[0];
+const ESCOPOS_PEDIDOS = &#x27;saldo:read transacoes:read&#x27;; // menor privilégio: NÃO pede transacoes:write
+const sessoes = new Map();
+const log = (...a) =&gt; { if (!process.env.OAUTH_QUIET) console.log(&#x27;[cliente]&#x27;, ...a); };
+
+function obterSessao(req, res) {
+  let sid = lerCookies(req).sid;
+  if (!sid || !sessoes.has(sid)) {
+    sid = aleatorio(16);
+    sessoes.set(sid, { log: [] });
+    res.setHeader(&#x27;Set-Cookie&#x27;, `sid=${sid}; HttpOnly; SameSite=Lax; Path=/`);
+  }
+  return sessoes.get(sid);
+}
+
+async function pedirToken(params) {
+  const basic = Buffer.from(`${encodeURIComponent(CLIENTE.client_id)}:${encodeURIComponent(CLIENTE.client_secret)}`).toString(&#x27;base64&#x27;);
+  const r = await fetch(`${AUTH}/token`, {
+    method: &#x27;POST&#x27;,
+    headers: { &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27;, Authorization: `Basic ${basic}` },
+    body: new URLSearchParams(params),
+  });
+  return { status: r.status, corpo: await r.json() };
+}
+
+const resumir = (t) =&gt; (t ? `${t.slice(0, 16)}…` : undefined);
+function guardarTokens(s, corpo) {
+  s.refreshAnterior = s.tokens?.refresh_token;
+  s.tokens = corpo;
+}
+
+function telaInicial(s) {
+  const t = s.tokens;
+  const claims = t ? jwt.decodificar(t.access_token) : null;
+  const restante = claims ? claims.exp - Math.floor(Date.now() / 1000) : 0;
+  const blocoLogin = `&lt;p&gt;Você ainda não autorizou o App Finanças a acessar sua conta.&lt;/p&gt;
+    &lt;a class=&quot;btn&quot; href=&quot;/login&quot;&gt;Entrar com o Provedor OAuth&lt;/a&gt;
+    &lt;a class=&quot;btn perigo&quot; href=&quot;/login-redirect-invalido&quot;&gt;Testar redirect_uri NÃO registrada&lt;/a&gt;`;
+  const blocoLogado = () =&gt; `&lt;h2&gt;Access token — claims (decodificado, sem validar)&lt;/h2&gt;
+    &lt;pre&gt;${esc(JSON.stringify(claims, null, 2))}&lt;/pre&gt;
+    &lt;p&gt;Expira em: &lt;b&gt;${restante &gt; 0 ? `${restante} s` : &#x27;EXPIRADO&#x27;}&lt;/b&gt; · refresh token: &lt;code&gt;${esc(resumir(t.refresh_token))}&lt;/code&gt;&lt;/p&gt;
+    &lt;div&gt;
+      &lt;a class=&quot;btn&quot; href=&quot;/chamar/saldo&quot;&gt;GET /saldo&lt;/a&gt;
+      &lt;a class=&quot;btn&quot; href=&quot;/chamar/transacoes&quot;&gt;GET /transacoes&lt;/a&gt;
+      &lt;form method=&quot;post&quot; action=&quot;/transferir&quot;&gt;&lt;button class=&quot;perigo&quot;&gt;POST /transferencias (escopo não concedido)&lt;/button&gt;&lt;/form&gt;
+    &lt;/div&gt;&lt;div&gt;
+      &lt;form method=&quot;post&quot; action=&quot;/renovar&quot;&gt;&lt;button class=&quot;sec&quot;&gt;Renovar token (refresh)&lt;/button&gt;&lt;/form&gt;
+      ${s.refreshAnterior ? &#x27;&lt;form method=&quot;post&quot; action=&quot;/reusar-refresh&quot;&gt;&lt;button class=&quot;perigo&quot;&gt;Reutilizar refresh token ANTIGO&lt;/button&gt;&lt;/form&gt;&#x27; : &#x27;&#x27;}
+      &lt;form method=&quot;post&quot; action=&quot;/sair&quot;&gt;&lt;button class=&quot;sec&quot;&gt;Sair (revogar)&lt;/button&gt;&lt;/form&gt;
+      &lt;a class=&quot;btn sec&quot; href=&quot;/&quot;&gt;Atualizar&lt;/a&gt;
+    &lt;/div&gt;`;
+  const u = s.ultimo;
+  return pagina(&#x27;App Finanças — cliente OAuth&#x27;, `
+    &lt;p class=&quot;tag&quot;&gt;Aplicação cliente · App Finanças · porta ${cfg.PORTAS.cliente}&lt;/p&gt;
+    &lt;h1&gt;App Finanças&lt;/h1&gt;
+    ${t ? blocoLogado() : blocoLogin}
+    ${u ? `&lt;h2&gt;Última operação: ${esc(u.titulo)} → HTTP ${u.status}&lt;/h2&gt;&lt;pre&gt;${esc(JSON.stringify(u.corpo, null, 2))}&lt;/pre&gt;` : &#x27;&#x27;}
+    ${s.log.length ? `&lt;h2&gt;Linha do tempo do fluxo&lt;/h2&gt;&lt;ol&gt;${s.log.map((l) =&gt; `&lt;li&gt;${esc(l)}&lt;/li&gt;`).join(&#x27;&#x27;)}&lt;/ol&gt;` : &#x27;&#x27;}`);
+}
+
+function urlAutorizacao(s, redirectUri) {
+  s.state = aleatorio(16); // anti-CSRF
+  s.verifier = aleatorio(32); // PKCE: segredo que só o back-end do cliente conhece
+  const challenge = sha256b64url(s.verifier);
+  const u = new URL(`${AUTH}/authorize`);
+  u.search = new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: CLIENTE.client_id, redirect_uri: redirectUri, scope: ESCOPOS_PEDIDOS, state: s.state, code_challenge: challenge, code_challenge_method: &#x27;S256&#x27; });
+  s.log = [
+    `Cliente gerou state=${s.state.slice(0, 8)}… e um code_verifier secreto; calculou code_challenge=${challenge.slice(0, 10)}… (SHA-256).`,
+    `Navegador redirecionado para ${AUTH}/authorize pedindo os escopos &quot;${ESCOPOS_PEDIDOS}&quot;.`,
+  ];
+  return u.toString();
+}
+
+async function callback(s, url, res) {
+  const q = url.searchParams;
+  if (q.get(&#x27;error&#x27;)) {
+    s.ultimo = { titulo: &#x27;Autorização não concedida&#x27;, status: 400, corpo: Object.fromEntries(q) };
+    s.log.push(`Provedor devolveu erro: ${q.get(&#x27;error&#x27;)}.`);
+    return redirecionar(res, &#x27;/&#x27;);
+  }
+  if (!s.state || q.get(&#x27;state&#x27;) !== s.state) {
+    return html(res, 400, pagina(&#x27;Erro&#x27;, &#x27;&lt;h1&gt;state inválido&lt;/h1&gt;&lt;p class=&quot;erro&quot;&gt;Possível ataque CSRF: esta resposta não corresponde a um pedido iniciado nesta sessão.&lt;/p&gt;&lt;a class=&quot;btn&quot; href=&quot;/&quot;&gt;Voltar&lt;/a&gt;&#x27;));
+  }
+  const code = q.get(&#x27;code&#x27;);
+  s.log.push(`Callback recebeu code=${code.slice(0, 8)}… e o state conferiu.`);
+  const r = await pedirToken({ grant_type: &#x27;authorization_code&#x27;, code, redirect_uri: REDIRECT_URI, code_verifier: s.verifier });
+  delete s.state;
+  delete s.verifier;
+  if (r.status !== 200) {
+    s.ultimo = { titulo: &#x27;Troca do código falhou&#x27;, ...r };
+    return redirecionar(res, &#x27;/&#x27;);
+  }
+  s.log.push(&#x27;Back-end do cliente trocou code + code_verifier + client_secret por tokens em POST /token (canal servidor-servidor).&#x27;);
+  guardarTokens(s, r.corpo);
+  s.ultimo = { titulo: &#x27;Tokens recebidos (valores abreviados)&#x27;, status: 200, corpo: { ...r.corpo, access_token: resumir(r.corpo.access_token), refresh_token: resumir(r.corpo.refresh_token) } };
+  redirecionar(res, &#x27;/&#x27;);
+}
+
+async function chamarApi(s, metodo, caminho, corpo) {
+  const r = await fetch(`${API}${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${s.tokens.access_token}`, &#x27;Content-Type&#x27;: &#x27;application/json&#x27; },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  s.ultimo = { titulo: `${metodo} ${caminho}`, status: r.status, corpo: await r.json() };
+  s.log.push(`Chamou ${metodo} ${caminho} com Authorization: Bearer → HTTP ${r.status}.`);
+}
+
+async function renovar(s, refresh, titulo) {
+  const r = await pedirToken({ grant_type: &#x27;refresh_token&#x27;, refresh_token: refresh });
+  if (r.status === 200) {
+    guardarTokens(s, r.corpo);
+    s.ultimo = { titulo, status: 200, corpo: { ...r.corpo, access_token: resumir(r.corpo.access_token), refresh_token: resumir(r.corpo.refresh_token) } };
+    s.log.push(&#x27;Refresh token trocado por um NOVO par de tokens (rotação: o refresh antigo foi invalidado).&#x27;);
+  } else {
+    s.ultimo = { titulo, ...r };
+    s.log.push(`Renovação recusada: ${r.corpo.error_description}`);
+    if (String(r.corpo.error_description).includes(&#x27;REUSO&#x27;)) delete s.tokens; // sessão comprometida
+  }
+}
+
+function criarServidor() {
+  return http.createServer(async (req, res) =&gt; {
+    const url = new URL(req.url, `http://localhost:${cfg.PORTAS.cliente}`);
+    const s = obterSessao(req, res);
+    log(req.method, url.pathname);
+    try {
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/&#x27;) return html(res, 200, telaInicial(s));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/login&#x27;) return redirecionar(res, urlAutorizacao(s, REDIRECT_URI));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/login-redirect-invalido&#x27;) return redirecionar(res, urlAutorizacao(s, &#x27;http://site-malicioso.exemplo/callback&#x27;));
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/callback&#x27;) return await callback(s, url, res);
+      if (!s.tokens) return redirecionar(res, &#x27;/&#x27;); // rotas abaixo exigem login
+      if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/chamar/saldo&#x27;) await chamarApi(s, &#x27;GET&#x27;, &#x27;/saldo&#x27;);
+      else if (req.method === &#x27;GET&#x27; &amp;&amp; url.pathname === &#x27;/chamar/transacoes&#x27;) await chamarApi(s, &#x27;GET&#x27;, &#x27;/transacoes&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/transferir&#x27;) await chamarApi(s, &#x27;POST&#x27;, &#x27;/transferencias&#x27;, { destino: &#x27;Conta 9999-0&#x27;, valor: 100 });
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/renovar&#x27;) await renovar(s, s.tokens.refresh_token, &#x27;Renovação com refresh token atual&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/reusar-refresh&#x27; &amp;&amp; s.refreshAnterior) await renovar(s, s.refreshAnterior, &#x27;Tentativa de REUSO do refresh token antigo&#x27;);
+      else if (req.method === &#x27;POST&#x27; &amp;&amp; url.pathname === &#x27;/sair&#x27;) {
+        const basic = Buffer.from(`${CLIENTE.client_id}:${CLIENTE.client_secret}`).toString(&#x27;base64&#x27;);
+        await fetch(`${AUTH}/revoke`, { method: &#x27;POST&#x27;, headers: { Authorization: `Basic ${basic}`, &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27; }, body: new URLSearchParams({ token: s.tokens.refresh_token }) });
+        delete s.tokens;
+        delete s.refreshAnterior;
+        s.ultimo = { titulo: &#x27;Logout&#x27;, status: 200, corpo: { mensagem: &#x27;Refresh token revogado no provedor e sessão local encerrada.&#x27; } };
+        s.log = [];
+      }
+      redirecionar(res, &#x27;/&#x27;); // padrão Post/Redirect/Get
+    } catch (e) {
+      console.error(&#x27;[cliente] erro:&#x27;, e);
+      html(res, 502, pagina(&#x27;Erro&#x27;, `&lt;h1&gt;Falha ao falar com o provedor/API&lt;/h1&gt;&lt;pre&gt;${esc(e.message)}&lt;/pre&gt;&lt;p&gt;Os três servidores estão rodando? Use &lt;code&gt;npm start&lt;/code&gt;.&lt;/p&gt;`));
+    }
+  });
+}
+
+function iniciar(porta = cfg.PORTAS.cliente) {
+  return new Promise((resolve, reject) =&gt; {
+    const s = criarServidor();
+    s.once(&#x27;error&#x27;, reject);
+    s.listen(porta, () =&gt; { log(`App Finanças em http://localhost:${porta}`); resolve(s); });
+  });
+}
+
+if (require.main === module) iniciar().catch((e) =&gt; { console.error(e.message); process.exit(1); });
+module.exports = { iniciar };</code></pre></div></details>
+<details class="arq"><summary><code>src/iniciar.js</code> <small>27 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/iniciar.js</span><button class="copiar" type="button" aria-label="Copiar src/iniciar.js">Copiar</button></div><pre><code>// =============================================================
+// iniciar.js — Sobe os três papéis do OAuth no mesmo processo
+// =============================================================
+const cfg = require(&#x27;./config&#x27;);
+const auth = require(&#x27;./auth-server&#x27;);
+const api = require(&#x27;./api-financeira&#x27;);
+const cliente = require(&#x27;./cliente-web&#x27;);
+
+(async () =&gt; {
+  await auth.iniciar();
+  await api.iniciar();
+  await cliente.iniciar();
+  console.log(`
+==============================================================
+ Laboratório OAuth em execução
+  Servidor de Autorização : ${cfg.EMISSOR}
+  API Financeira (recursos): http://localhost:${cfg.PORTAS.api}
+  App Finanças (cliente)   : http://localhost:${cfg.PORTAS.cliente}   &lt;-- abra no navegador
+  Usuário demo: aluno / senha123   | access token: ${cfg.ACCESS_TOKEN_TTL}s
+  Pressione Ctrl+C para encerrar.
+==============================================================`);
+})().catch((e) =&gt; {
+  console.error(`Falha ao iniciar: ${e.message}`);
+  if (e.code === &#x27;EADDRINUSE&#x27;) console.error(&#x27;Porta ocupada. Feche o outro servidor (Ctrl+C) ou defina AUTH_PORT/API_PORT/CLIENT_PORT.&#x27;);
+  process.exit(1);
+});</code></pre></div></details>
+<details class="arq"><summary><code>src/client-credentials.js</code> <small>39 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>src/client-credentials.js</span><button class="copiar" type="button" aria-label="Copiar src/client-credentials.js">Copiar</button></div><pre><code>// =============================================================
+// client-credentials.js — Comunicação SERVIDOR-SERVIDOR
+// O &quot;Serviço de Relatórios&quot; não tem usuário: autentica-se com o
+// próprio client_id/client_secret e recebe um token só dele.
+// Uso (com &quot;npm start&quot; rodando em outro terminal): npm run cc
+// =============================================================
+const cfg = require(&#x27;./config&#x27;);
+
+const svc = cfg.CLIENTES.find((c) =&gt; c.client_id === &#x27;servico-relatorios&#x27;);
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const basic = Buffer.from(`${svc.client_id}:${svc.client_secret}`).toString(&#x27;base64&#x27;);
+
+async function chamar(caminho, token) {
+  const r = await fetch(`${API}${caminho}`, { headers: { Authorization: `Bearer ${token}` } });
+  console.log(`   GET ${caminho} -&gt; HTTP ${r.status}`);
+  console.log(JSON.stringify(await r.json(), null, 2).replace(/^/gm, &#x27;   &#x27;));
+}
+
+(async () =&gt; {
+  console.log(&#x27;1) Serviço de Relatórios pede token direto ao provedor (grant_type=client_credentials)&#x27;);
+  const r = await fetch(`${cfg.EMISSOR}/token`, {
+    method: &#x27;POST&#x27;,
+    headers: { Authorization: `Basic ${basic}`, &#x27;Content-Type&#x27;: &#x27;application/x-www-form-urlencoded&#x27; },
+    body: new URLSearchParams({ grant_type: &#x27;client_credentials&#x27;, scope: &#x27;relatorios:read&#x27; }),
+  });
+  const t = await r.json();
+  console.log(`   HTTP ${r.status} | scope=${t.scope} | expires_in=${t.expires_in}s | refresh_token=${t.refresh_token ?? &#x27;(nenhum — não há usuário)&#x27;}`);
+  if (!r.ok) process.exit(1);
+
+  console.log(&#x27;2) Usa o token no recurso permitido pelo escopo:&#x27;);
+  await chamar(&#x27;/relatorios/resumo&#x27;, t.access_token);
+
+  console.log(&#x27;3) Tenta um recurso de usuário (fora do escopo) — esperado 403:&#x27;);
+  await chamar(&#x27;/transacoes&#x27;, t.access_token);
+})().catch((e) =&gt; {
+  console.error(`Erro: ${e.message}. O laboratório está rodando? Execute &quot;npm start&quot; em outro terminal.`);
+  process.exit(1);
+});</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Sete arquivos dentro de <code>src/</code>.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>node --check src\cliente-web.js   (sem saída)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Error: Cannot find module &#x27;./util&#x27;</pre><p><b>Como corrigir:</b> util.js precisa estar na mesma pasta src\ (passo 6).</p></div></div></article>
+<article class="cartao passo" id="passo10"><div class="passo-topo"><label><input type="checkbox" class="item" id="i19" data-rotulo="Passo 10"><span class="num">Passo 10</span><span class="tit">Criar os testes automatizados</span></label><span class="amb">VS Code + PowerShell</span></div>
+<p>Os testes sobem os servidores em portas de teste (13000/14000/15000) e verificam 25 regras de segurança. O arquivo <code>.http</code> é usado com a extensão REST Client.</p>
+<div class="codigo"><div class="codigo-topo"><span>VS Code + PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar VS Code + PowerShell — comandos">Copiar</button></div><pre><code>npm test</code></pre></div>
+<details class="arq"><summary><code>testes/teste-fluxo.js</code> <small>122 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>testes/teste-fluxo.js</span><button class="copiar" type="button" aria-label="Copiar testes/teste-fluxo.js">Copiar</button></div><pre><code>// =============================================================
+// teste-fluxo.js — Testes automáticos do laboratório (npm test)
+// Sobe os servidores em portas de teste e verifica cada regra de
+// segurança do OAuth. Saída: [OK] / [FALHA] e código de saída.
+// =============================================================
+process.env.AUTH_PORT = &#x27;14000&#x27;;
+process.env.API_PORT = &#x27;15000&#x27;;
+process.env.CLIENT_PORT = &#x27;13000&#x27;;
+process.env.OAUTH_QUIET = &#x27;1&#x27;;
+
+const cfg = require(&#x27;../src/config&#x27;);
+const jwt = require(&#x27;../src/jwt&#x27;);
+const { sha256b64url, aleatorio } = require(&#x27;../src/util&#x27;);
+
+const AUTH = cfg.EMISSOR;
+const API = `http://localhost:${cfg.PORTAS.api}`;
+const WEB = cfg.CLIENTES[0];
+const SVC = cfg.CLIENTES[1];
+const REDIRECT = WEB.redirect_uris[0];
+const basic = (c) =&gt; `Basic ${Buffer.from(`${c.client_id}:${c.client_secret}`).toString(&#x27;base64&#x27;)}`;
+
+let ok = 0;
+let falhas = 0;
+function verificar(descricao, condicao, detalhe = &#x27;&#x27;) {
+  if (condicao) { ok++; console.log(`  [OK]    ${descricao}`); }
+  else { falhas++; console.log(`  [FALHA] ${descricao}${detalhe ? ` -&gt; ${detalhe}` : &#x27;&#x27;}`); }
+}
+
+async function token(params, cliente = WEB) {
+  const r = await fetch(`${AUTH}/token`, { method: &#x27;POST&#x27;, headers: { Authorization: basic(cliente) }, body: new URLSearchParams(params) });
+  return { status: r.status, corpo: await r.json() };
+}
+
+async function obterCodigo(verifier, extra = {}) {
+  const corpo = new URLSearchParams({
+    response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read transacoes:read&#x27;,
+    state: &#x27;estado123&#x27;, code_challenge: sha256b64url(verifier), code_challenge_method: &#x27;S256&#x27;,
+    login: &#x27;aluno&#x27;, senha: &#x27;senha123&#x27;, decisao: &#x27;permitir&#x27;, ...extra,
+  });
+  const r = await fetch(`${AUTH}/authorize`, { method: &#x27;POST&#x27;, body: corpo, redirect: &#x27;manual&#x27; });
+  const loc = r.headers.get(&#x27;location&#x27;);
+  return loc ? new URL(loc).searchParams : null;
+}
+
+const getApi = (caminho, tk) =&gt; fetch(`${API}${caminho}`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
+
+(async () =&gt; {
+  await require(&#x27;../src/auth-server&#x27;).iniciar();
+  await require(&#x27;../src/api-financeira&#x27;).iniciar();
+  await require(&#x27;../src/cliente-web&#x27;).iniciar();
+  console.log(&#x27;\nTestes do laboratório OAuth\n&#x27;);
+
+  console.log(&#x27;1. Registro e descoberta&#x27;);
+  const meta = await (await fetch(`${AUTH}/.well-known/oauth-authorization-server`)).json();
+  verificar(&#x27;metadados publicam token_endpoint e PKCE S256&#x27;, meta.token_endpoint &amp;&amp; meta.code_challenge_methods_supported.includes(&#x27;S256&#x27;));
+  verificar(&#x27;App Finanças responde na porta do cliente&#x27;, (await fetch(`http://localhost:${cfg.PORTAS.cliente}/`)).status === 200);
+
+  console.log(&#x27;2. Pedido de autorização&#x27;);
+  const ruim = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: &#x27;http://site-malicioso.exemplo/cb&#x27;, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27;, code_challenge: &#x27;abc&#x27;, code_challenge_method: &#x27;S256&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;redirect_uri não registrada é recusada SEM redirecionar (400)&#x27;, ruim.status === 400 &amp;&amp; !ruim.headers.get(&#x27;location&#x27;));
+  const semPkce = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;code&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;pedido sem PKCE volta com error=invalid_request&#x27;, new URL(semPkce.headers.get(&#x27;location&#x27;) || &#x27;http://x&#x27;).searchParams.get(&#x27;error&#x27;) === &#x27;invalid_request&#x27;);
+  const implicito = await fetch(`${AUTH}/authorize?${new URLSearchParams({ response_type: &#x27;token&#x27;, client_id: WEB.client_id, redirect_uri: REDIRECT, scope: &#x27;saldo:read&#x27;, state: &#x27;x&#x27; })}`, { redirect: &#x27;manual&#x27; });
+  verificar(&#x27;Implicit Flow (response_type=token) é recusado&#x27;, new URL(implicito.headers.get(&#x27;location&#x27;) || &#x27;http://x&#x27;).searchParams.get(&#x27;error&#x27;) === &#x27;unsupported_response_type&#x27;);
+  const escopoIndevido = await obterCodigo(&#x27;v&#x27;.repeat(43), { scope: &#x27;relatorios:read&#x27; });
+  verificar(&#x27;escopo não permitido ao cliente -&gt; invalid_scope&#x27;, escopoIndevido?.get(&#x27;error&#x27;) === &#x27;invalid_scope&#x27;);
+  const negado = await obterCodigo(&#x27;v&#x27;.repeat(43), { decisao: &#x27;negar&#x27; });
+  verificar(&#x27;usuário que nega o consentimento -&gt; access_denied&#x27;, negado?.get(&#x27;error&#x27;) === &#x27;access_denied&#x27;);
+
+  console.log(&#x27;3. Troca do código (Authorization Code + PKCE)&#x27;);
+  const v1 = aleatorio(32);
+  const q1 = await obterCodigo(v1);
+  verificar(&#x27;login correto devolve code e o mesmo state&#x27;, q1?.get(&#x27;code&#x27;) &amp;&amp; q1.get(&#x27;state&#x27;) === &#x27;estado123&#x27;);
+  const pkceErrado = await token({ grant_type: &#x27;authorization_code&#x27;, code: q1.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: &#x27;verificador-errado&#x27; });
+  verificar(&#x27;code_verifier errado -&gt; invalid_grant&#x27;, pkceErrado.status === 400 &amp;&amp; pkceErrado.corpo.error === &#x27;invalid_grant&#x27;);
+  const v2 = aleatorio(32);
+  const q2 = await obterCodigo(v2);
+  const segredoErrado = await token({ grant_type: &#x27;authorization_code&#x27;, code: q2.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v2 }, { ...WEB, client_secret: &#x27;errado&#x27; });
+  verificar(&#x27;client_secret errado -&gt; 401 invalid_client&#x27;, segredoErrado.status === 401);
+  const v3 = aleatorio(32);
+  const q3 = await obterCodigo(v3);
+  const t1 = await token({ grant_type: &#x27;authorization_code&#x27;, code: q3.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v3 });
+  verificar(&#x27;troca correta devolve access_token + refresh_token&#x27;, t1.status === 200 &amp;&amp; t1.corpo.access_token &amp;&amp; t1.corpo.refresh_token);
+  verificar(&#x27;token traz apenas os escopos pedidos (menor privilégio)&#x27;, t1.corpo.scope === &#x27;saldo:read transacoes:read&#x27;);
+  const reuso = await token({ grant_type: &#x27;authorization_code&#x27;, code: q3.get(&#x27;code&#x27;), redirect_uri: REDIRECT, code_verifier: v3 });
+  verificar(&#x27;código é de uso único (2ª troca -&gt; invalid_grant)&#x27;, reuso.status === 400);
+
+  console.log(&#x27;4. Servidor de recursos (API)&#x27;);
+  verificar(&#x27;GET /transacoes com token válido -&gt; 200&#x27;, (await getApi(&#x27;/transacoes&#x27;, t1.corpo.access_token)).status === 200);
+  verificar(&#x27;GET /transacoes sem token -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;)).status === 401);
+  const transf = await fetch(`${API}/transferencias`, { method: &#x27;POST&#x27;, headers: { Authorization: `Bearer ${t1.corpo.access_token}` } });
+  verificar(&#x27;POST /transferencias sem escopo transacoes:write -&gt; 403&#x27;, transf.status === 403);
+  const [h, , s] = t1.corpo.access_token.split(&#x27;.&#x27;);
+  const pAdulterado = Buffer.from(JSON.stringify({ ...jwt.decodificar(t1.corpo.access_token), scope: &#x27;transacoes:write&#x27; })).toString(&#x27;base64url&#x27;);
+  verificar(&#x27;token adulterado (escopo alterado) -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;, `${h}.${pAdulterado}.${s}`)).status === 401);
+  const expirado = jwt.assinar({ ...jwt.decodificar(t1.corpo.access_token), exp: Math.floor(Date.now() / 1000) - 5 }, cfg.SEGREDO_ASSINATURA);
+  verificar(&#x27;token expirado -&gt; 401&#x27;, (await getApi(&#x27;/transacoes&#x27;, expirado)).status === 401);
+
+  console.log(&#x27;5. Renovação (refresh token com rotação)&#x27;);
+  const t2 = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t1.corpo.refresh_token });
+  verificar(&#x27;refresh válido devolve NOVO par de tokens&#x27;, t2.status === 200 &amp;&amp; t2.corpo.refresh_token !== t1.corpo.refresh_token);
+  const reusoRt = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t1.corpo.refresh_token });
+  verificar(&#x27;reuso do refresh antigo é detectado (invalid_grant)&#x27;, reusoRt.status === 400 &amp;&amp; reusoRt.corpo.error_description.includes(&#x27;REUSO&#x27;));
+  const t3 = await token({ grant_type: &#x27;refresh_token&#x27;, refresh_token: t2.corpo.refresh_token });
+  verificar(&#x27;após reuso, o refresh novo também foi revogado (família)&#x27;, t3.status === 400);
+
+  console.log(&#x27;6. Client Credentials (servidor-servidor)&#x27;);
+  const cc = await token({ grant_type: &#x27;client_credentials&#x27;, scope: &#x27;relatorios:read&#x27; }, SVC);
+  verificar(&#x27;serviço obtém token sem usuário e sem refresh_token&#x27;, cc.status === 200 &amp;&amp; !cc.corpo.refresh_token);
+  verificar(&#x27;GET /relatorios/resumo com token do serviço -&gt; 200&#x27;, (await getApi(&#x27;/relatorios/resumo&#x27;, cc.corpo.access_token)).status === 200);
+  verificar(&#x27;token do serviço não acessa /transacoes -&gt; 403&#x27;, (await getApi(&#x27;/transacoes&#x27;, cc.corpo.access_token)).status === 403);
+  const ccWeb = await token({ grant_type: &#x27;client_credentials&#x27; }, WEB);
+  verificar(&#x27;App Finanças não pode usar client_credentials -&gt; unauthorized_client&#x27;, ccWeb.corpo.error === &#x27;unauthorized_client&#x27;);
+
+  console.log(`\nResultado: ${ok} OK, ${falhas} FALHA(S)\n`);
+  process.exit(falhas ? 1 : 0);
+})().catch((e) =&gt; {
+  console.error(`Erro inesperado nos testes: ${e.stack || e.message}`);
+  if (e.code === &#x27;EADDRINUSE&#x27;) console.error(&#x27;Portas de teste 13000/14000/15000 ocupadas.&#x27;);
+  process.exit(2);
+});</code></pre></div></details>
+<details class="arq"><summary><code>testes/requisicoes.http</code> <small>32 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>testes/requisicoes.http</span><button class="copiar" type="button" aria-label="Copiar testes/requisicoes.http">Copiar</button></div><pre><code># Requisições para a extensão REST Client (VS Code) — clique em &quot;Send Request&quot;
+# Pré-requisito: &quot;npm start&quot; rodando.
+
+### 1) Metadados do provedor (descoberta)
+GET http://localhost:4000/.well-known/oauth-authorization-server
+
+### 2) Client Credentials — token do Serviço de Relatórios
+# @name tokenServico
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-relatorios
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&amp;scope=relatorios:read
+
+### 3) Relatório com o token do serviço (esperado 200)
+GET http://localhost:5000/relatorios/resumo
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 4) Recurso de usuário com token do serviço (esperado 403 insufficient_scope)
+GET http://localhost:5000/transacoes
+Authorization: Bearer {{tokenServico.response.body.access_token}}
+
+### 5) Sem token (esperado 401 invalid_token)
+GET http://localhost:5000/saldo
+
+### 6) Segredo errado (esperado 401 invalid_client)
+POST http://localhost:4000/token
+Authorization: Basic servico-relatorios:segredo-errado
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&amp;scope=relatorios:read</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> Saída termina em <code>Resultado: 25 OK, 0 FALHA(S)</code>.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>  [OK]    código é de uso único (2ª troca -&gt; invalid_grant)
+...
+Resultado: 25 OK, 0 FALHA(S)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>  [FALHA] POST /transferencias sem escopo transacoes:write -&gt; 403
+Resultado: 24 OK, 1 FALHA(S)</pre><p><b>Como corrigir:</b> Leia a linha [FALHA]: ela aponta a regra quebrada; compare o arquivo correspondente com o código da página.</p></div></div></article>
+<article class="cartao passo" id="passo11"><div class="passo-topo"><label><input type="checkbox" class="item" id="i20" data-rotulo="Passo 11"><span class="num">Passo 11</span><span class="tit">Copiar o modelo do plano e fazer o primeiro commit</span></label><span class="amb">VS Code + Git</span></div>
+<p>Crie <code>docs/plano-oauth.md</code> com o modelo abaixo (será completado no passo 17) e registre a versão inicial.</p>
+<div class="codigo"><div class="codigo-topo"><span>VS Code + Git — comandos</span><button class="copiar" type="button" aria-label="Copiar VS Code + Git — comandos">Copiar</button></div><pre><code>git add .
+git commit -m &quot;feat: laboratorio OAuth (auth code + PKCE, refresh e client credentials)&quot;
+git log --oneline</code></pre></div>
+<details class="arq"><summary><code>docs/plano-oauth.md</code> <small>57 linhas — clique para ver/copiar</small></summary><div class="codigo"><div class="codigo-topo"><span>docs/plano-oauth.md</span><button class="copiar" type="button" aria-label="Copiar docs/plano-oauth.md">Copiar</button></div><pre><code># Plano de implementação de OAuth 2.0 — API Financeira
+
+**Grupo:** _(nomes dos integrantes)_  **Turma:** _____  **Data:** ___/___/______
+
+## 1. Contexto
+A API financeira expõe saldo, extrato e transferências. Ela é consumida por (a) um aplicativo web usado por pessoas e (b) um serviço interno de relatórios que roda sem usuário. Objetivo: permitir esse acesso **sem que nenhuma aplicação conheça a senha do usuário**, com permissões mínimas e tokens de vida curta.
+
+## 2. Escolha do fluxo (justificativa)
+| Cliente | Fluxo escolhido | Por quê |
+|---|---|---|
+| App Finanças (web, com back-end) | **Authorization Code + PKCE** | O usuário se autentica só no provedor; o código trafega pelo navegador mas só vale junto com o `code_verifier` (PKCE) e o `client_secret`, que ficam no back-end. É o fluxo recomendado pelas boas práticas atuais (RFC 9700 / OAuth 2.1). |
+| SPA ou app mobile (futuro) | **Authorization Code + PKCE** (cliente público, sem segredo) | O **Implicit Flow** foi descontinuado: entrega o token na URL, expondo-o a histórico, logs e scripts. |
+| Serviço de Relatórios | **Client Credentials** | Comunicação servidor-servidor: não existe usuário, a aplicação age em nome próprio. Não recebe refresh token. |
+
+## 3. Configuração
+1. **Registro da aplicação** no provedor (no laboratório: `src/config.js`): `client_id`, `client_secret` (guardado em variável de ambiente/cofre, nunca no Git), tipo de cliente e fluxos permitidos (`grant_types`).
+2. **URLs de redirecionamento**: lista exata, sempre HTTPS em produção (`https://app.exemplo.com.br/callback`), sem curingas. O provedor recusa qualquer outra — no lab, `http://site-malicioso.exemplo/callback` é bloqueada.
+3. **Escopos** (menor privilégio):
+
+| Escopo | Permite | Quem recebe |
+|---|---|---|
+| `saldo:read` | Consultar saldo | App Finanças |
+| `transacoes:read` | Consultar extrato | App Finanças |
+| `transacoes:write` | Transferências | Somente com consentimento explícito e, idealmente, autenticação forte (MFA) |
+| `relatorios:read` | Relatório consolidado | Serviço de Relatórios |
+
+4. **Proteções do pedido**: `state` aleatório por pedido (anti-CSRF), PKCE `S256` obrigatório, código de autorização de **uso único** com validade de 60 s.
+5. **Validação na API**: assinatura do JWT, `exp`, `iss`, `aud` e escopo por rota — 401 para token inválido/expirado, 403 para escopo insuficiente.
+
+## 4. Gestão de tokens
+| Token | Formato | Validade | Onde fica |
+|---|---|---|---|
+| Access token | JWT assinado | 5–15 min (lab: 2 min) | Memória do back-end do cliente |
+| Refresh token | Opaco (aleatório) | 30 min a alguns dias, conforme risco | Back-end do cliente (nunca em localStorage) |
+| Código de autorização | Opaco | 60 s, uso único | Trafega uma vez pelo navegador |
+
+**Exemplo prático:** às 10h00 o usuário autoriza o app e recebe access (expira 10h05) + refresh. Às 10h06 a API responde 401 → o back-end usa o refresh e recebe um **novo par** (rotação); o refresh antigo é invalidado. Se alguém reutilizar o refresh antigo, o provedor detecta o **reuso** e revoga toda a família de tokens, forçando novo login. No logout, o app chama `/revoke`.
+
+## 5. Comunicação com a equipe
+- Resumo de uma página + diagrama de sequência do fluxo; decisão registrada (ADR) no repositório.
+- Checklist obrigatório em code review (PKCE, `state`, redirect exato, escopos mínimos, segredos fora do código, validação `iss/aud/exp`).
+- Testes automatizados de segurança no CI (`npm test`) — o pipeline falha se uma regra for quebrada.
+- Demonstração ao vivo no laboratório e canal único de dúvidas; revisão do plano a cada mudança de escopo.
+
+## 6. Evidências do laboratório
+- [ ] Print do `npm test` com 25 OK
+- [ ] Print do consentimento no provedor e das claims do token
+- [ ] Print do 403 (escopo) e do erro de redirect_uri
+- [ ] Print da renovação e da detecção de reuso
+- [ ] Saída do `npm run cc`
+
+## Referências
+- SEDUC-SP. *Descomplicando o OAuth: autorização segura para APIs* — Programação Back-End, 2ª série, 4º bimestre, semana 25, aula 1.
+- [RFC 6749 — The OAuth 2.0 Authorization Framework](https://www.rfc-editor.org/rfc/rfc6749)
+- [RFC 7636 — PKCE](https://www.rfc-editor.org/rfc/rfc7636)
+- [RFC 9700 — Best Current Practice for OAuth 2.0 Security](https://www.rfc-editor.org/rfc/rfc9700)</code></pre></div></details>
+<p class="ok"><b>Resultado esperado:</b> <code>git log</code> mostra o commit.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>[main (root-commit) 3f9c2ab] feat: laboratorio OAuth ...
+ 14 files changed, 1040 insertions(+)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Author identity unknown
+*** Please tell me who you are.</pre><p><b>Como corrigir:</b> git config --global user.name &quot;Seu Nome&quot;  e  git config --global user.email &quot;seu@email&quot;; repita o commit.</p></div></div></article>
+<article class="cartao passo" id="passo12"><div class="passo-topo"><label><input type="checkbox" class="item" id="i21" data-rotulo="Passo 12"><span class="num">Passo 12</span><span class="tit">Iniciar os servidores</span></label><span class="amb">PowerShell</span></div>
+<p>Suba o laboratório e deixe este terminal aberto (ele mostra os logs <code>[auth]</code>, <code>[api]</code>, <code>[cliente]</code>). Visite também a página do provedor para ver as aplicações registradas e os metadados.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell — comandos">Copiar</button></div><pre><code>npm start
+# depois abra no navegador:
+#   http://localhost:3000   (App Finanças)
+#   http://localhost:4000   (registro + metadados do provedor)</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Banner “Laboratório OAuth em execução” e as duas páginas abrem.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>==============================================================
+ Laboratório OAuth em execução
+  App Finanças (cliente)   : http://localhost:3000</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Falha ao iniciar: listen EADDRINUSE: address already in use :::4000
+Porta ocupada...</pre><p><b>Como corrigir:</b> Feche o outro terminal com npm start (Ctrl+C) ou encerre o processo: Get-NetTCPConnection -LocalPort 4000 | Select OwningProcess; Stop-Process -Id &lt;PID&gt;.</p></div></div></article>
+<article class="cartao passo" id="passo13"><div class="passo-topo"><label><input type="checkbox" class="item" id="i22" data-rotulo="Passo 13"><span class="num">Passo 13</span><span class="tit">Executar o Authorization Code Flow com PKCE</span></label><span class="amb">Navegador</span></div>
+<p>Abra o DevTools (F12) na aba <b>Rede</b> com “Preservar log”. Clique em <b>Entrar com o Provedor OAuth</b> e observe na URL os parâmetros <code>response_type=code</code>, <code>state</code>, <code>code_challenge</code> e <code>scope</code>. Entre com <b>aluno / senha123</b> e clique em <b>Permitir acesso</b>. Observe o redirecionamento para <code>/callback?code=…&amp;state=…</code>, as claims do token e a linha do tempo. Depois clique em <b>GET /saldo</b> e <b>GET /transacoes</b>.</p>
+<p class="ok"><b>Resultado esperado:</b> HTTP 200 nas duas consultas; print das claims (scope = <code>saldo:read transacoes:read</code>).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>Última operação: GET /transacoes → HTTP 200
+&quot;scope&quot;: &quot;saldo:read transacoes:read&quot;</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Pedido de autorização recusado / Usuário ou senha inválidos.</pre><p><b>Como corrigir:</b> Use aluno / senha123. Se aparecer erro de redirect_uri, confira CLIENT_PORT e redirect_uris em config.js.</p></div></div></article>
+<article class="cartao passo" id="passo14"><div class="passo-topo"><label><input type="checkbox" class="item" id="i23" data-rotulo="Passo 14"><span class="num">Passo 14</span><span class="tit">Testar as regras de segurança</span></label><span class="amb">Navegador + PowerShell</span></div>
+<p>(a) Clique em <b>POST /transferencias</b> → <b>403 insufficient_scope</b> (o app não pediu <code>transacoes:write</code>). (b) Clique em <b>Sair</b> e depois em <b>Testar redirect_uri NÃO registrada</b> → o provedor recusa sem redirecionar. (c) Faça login e clique em <b>Negar</b> → <code>access_denied</code>. (d) Em outro terminal, chame a API sem token:</p>
+<div class="codigo"><div class="codigo-topo"><span>Navegador + PowerShell — comandos</span><button class="copiar" type="button" aria-label="Copiar Navegador + PowerShell — comandos">Copiar</button></div><pre><code>curl.exe -i http://localhost:5000/transacoes      # esperado: HTTP/1.1 401</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Prints do 403, do erro de redirect_uri e do 401.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>POST /transferencias → HTTP 403 &quot;insufficient_scope&quot;
+HTTP/1.1 401 Unauthorized  (curl.exe sem token)</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>curl : Não é possível vincular o parâmetro &#x27;Headers&#x27;...  (usou curl em vez de curl.exe)</pre><p><b>Como corrigir:</b> No Windows PowerShell 5.1, curl é apelido de Invoke-WebRequest: digite curl.exe.</p></div></div></article>
+<article class="cartao passo" id="passo15"><div class="passo-topo"><label><input type="checkbox" class="item" id="i24" data-rotulo="Passo 15"><span class="num">Passo 15</span><span class="tit">Observar expiração, renovação e reuso de token</span></label><span class="amb">PowerShell + Navegador</span></div>
+<p>Pare o servidor (<b>Ctrl+C</b>) e reinicie com access token de 20 s. Faça login, espere 20 s e clique em <b>GET /saldo</b> → <b>401 token expirado</b>. Clique em <b>Renovar token</b> → novo par de tokens (rotação). Clique em <b>Reutilizar refresh token ANTIGO</b> → <b>400 REUSO detectado</b> e a sessão é revogada.</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell + Navegador — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell + Navegador — comandos">Copiar</button></div><pre><code>$env:ACCESS_TTL = 20
+npm start
+# ao terminar o passo: Ctrl+C e depois
+Remove-Item Env:ACCESS_TTL</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Prints do 401 por expiração, da renovação (200) e do reuso (400).</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>GET /saldo → HTTP 401 &quot;token expirado&quot;
+Renovação com refresh token atual → HTTP 200
+Tentativa de REUSO ... → HTTP 400</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Expira em: 118 s  (a variável não foi aplicada)</pre><p><b>Como corrigir:</b> Defina $env:ACCESS_TTL = 20 no MESMO terminal antes do npm start.</p></div></div></article>
+<article class="cartao passo" id="passo16"><div class="passo-topo"><label><input type="checkbox" class="item" id="i25" data-rotulo="Passo 16"><span class="num">Passo 16</span><span class="tit">Executar o Client Credentials Flow</span></label><span class="amb">PowerShell (2º terminal)</span></div>
+<p>Com o servidor rodando, abra outro terminal. O Serviço de Relatórios obtém token sem usuário e sem refresh token, acessa o relatório (200) e é barrado em <code>/transacoes</code> (403). Alternativa: abra <code>testes/requisicoes.http</code> no VS Code e use <b>Send Request</b> (REST Client).</p>
+<div class="codigo"><div class="codigo-topo"><span>PowerShell (2º terminal) — comandos</span><button class="copiar" type="button" aria-label="Copiar PowerShell (2º terminal) — comandos">Copiar</button></div><pre><code>cd &quot;$HOME\Documents\atividade-oauth-api&quot;
+npm run cc</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Saída mostra HTTP 200 no relatório e HTTP 403 em /transacoes.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>1) ... HTTP 200 | scope=relatorios:read | refresh_token=(nenhum — não há usuário)
+   GET /relatorios/resumo -&gt; HTTP 200
+   GET /transacoes -&gt; HTTP 403</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Erro: fetch failed. O laboratório está rodando? Execute &quot;npm start&quot; em outro terminal.</pre><p><b>Como corrigir:</b> Deixe o npm start rodando no 1º terminal e execute npm run cc no 2º.</p></div></div></article>
+<article class="cartao passo" id="passo17"><div class="passo-topo"><label><input type="checkbox" class="item" id="i26" data-rotulo="Passo 17"><span class="num">Passo 17</span><span class="tit">Redigir o plano de implementação do grupo</span></label><span class="amb">VS Code</span></div>
+<p>Etapa <b>Execução</b> do roteiro: complete <code>docs/plano-oauth.md</code> com os nomes do grupo, adapte as justificativas com as palavras do grupo e anexe as evidências (prints) dos passos 10 e 13 a 16. O plano precisa cobrir: escolha do fluxo, configuração (registro, escopos, redirect URIs) e gestão de tokens (expiração, renovação).</p>
+<p class="ok"><b>Resultado esperado:</b> As seis seções do plano preenchidas.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>docs/plano-oauth.md com as 6 seções preenchidas e prints anexados</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>Seções 1–5 copiadas sem adaptação e sem evidências (seção 6 vazia)</pre><p><b>Como corrigir:</b> Reescreva as justificativas com as palavras do grupo e anexe os prints dos passos 10 e 13–16.</p></div></div></article>
+<article class="cartao passo" id="passo18"><div class="passo-topo"><label><input type="checkbox" class="item" id="i27" data-rotulo="Passo 18"><span class="num">Passo 18</span><span class="tit">Responder às perguntas e entregar</span></label><span class="amb">Git + VS Code</span></div>
+<p>Responda às quatro perguntas da mensagem do Slack (seção Respostas desta página serve de gabarito para conferência após 50% de progresso), registre o plano no Git e entregue conforme a orientação do(a) professor(a). Se a turma usa repositório remoto, a publicação é manual: crie o repositório no GitHub, faça login e rode <code>git remote add origin &lt;URL&gt;</code> e <code>git push -u origin main</code>.</p>
+<div class="codigo"><div class="codigo-topo"><span>Git + VS Code — comandos</span><button class="copiar" type="button" aria-label="Copiar Git + VS Code — comandos">Copiar</button></div><pre><code>git add docs
+git commit -m &quot;docs: plano de implementacao OAuth do grupo&quot;
+git log --oneline</code></pre></div>
+<p class="ok"><b>Resultado esperado:</b> Dois commits no histórico e respostas entregues.</p>
+<div class="exemplos"><div class="ex sucesso"><h5>✔ Exemplo de sucesso</h5><pre>8b1d0e4 docs: plano de implementacao OAuth do grupo
+3f9c2ab feat: laboratorio OAuth ...</pre></div><div class="ex falha"><h5>✘ Exemplo de falha típica</h5><pre>nothing to commit, working tree clean</pre><p><b>Como corrigir:</b> Salve o arquivo no VS Code (Ctrl+S) antes do git add.</p></div></div></article>
+</section>
+<section class="cartao"><h2>Rubrica de avaliação (10 pontos)</h2><table class="tab rub"><thead><tr><th>Item</th><th>Critério de certo</th><th>Pontuação</th><th>Máx.</th></tr></thead><tbody>
+<tr><td><b>E1 — Ambiente e testes (passos 1–10)</b></td><td>Print do <code>npm test</code> com 25 OK, 0 FALHA(S).</td><td>Certo: 1,0 · Errado: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>E2 — Authorization Code + PKCE (passo 13)</b></td><td>Print das claims com <code>scope</code> = <code>saldo:read transacoes:read</code> e da linha do tempo do fluxo.</td><td>Certo: 1,0 · Errado: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>E3 — Regras de segurança (passo 14)</b></td><td>Prints do 403 <code>insufficient_scope</code> e da recusa da redirect_uri.</td><td>0,5 por evidência</td><td class="num">1,0</td></tr>
+<tr><td><b>E4 — Renovação e Client Credentials (15–16)</b></td><td>Print do reuso detectado (400) e saída do <code>npm run cc</code> com 200 e 403.</td><td>0,5 por evidência</td><td class="num">1,0</td></tr>
+<tr><td><b>E5 — Plano de implementação (17–18)</b></td><td><code>docs/plano-oauth.md</code> com nomes, fluxo justificado, configuração (registro + escopos + redirect), gestão de tokens com tempos e commit no Git.</td><td>0,5 por item presente</td><td class="num">2,0</td></tr>
+<tr><td><b>P1 — Escolha do fluxo</b></td><td>Relaciona o fluxo ao tipo de cliente/presença de usuário <b>e</b> recomenda Authorization Code + PKCE (Client Credentials só servidor-servidor).</td><td>Certo: 1,0 · Sem justificativa: 0,5 · Recomenda Implicit/senha: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P2 — Passos de configuração</b></td><td>Cita na ordem ao menos 5 passos, incluindo registro, redirect URI exata e escopos mínimos.</td><td>≥5 passos: 1,0 · 3–4: 0,5 · &lt;3: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P3 — Gestão de tokens</b></td><td>Explica expiração curta (janela de risco) + renovação por refresh + rotação ou revogação.</td><td>3 elementos: 1,0 · 2: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr><td><b>P4 — Comunicação à equipe</b></td><td>Propõe ao menos 3 mecanismos concretos (documento/ADR, checklist de revisão, testes no CI, demonstração).</td><td>≥3: 1,0 · 2: 0,5 · ≤1: 0</td><td class="num">1,0</td></tr>
+<tr class="total"><td colspan="3">Total</td><td class="num">10,0</td></tr></tbody></table></section>
+<section class="cartao bloqueio" id="aviso"><h2>Respostas da atividade</h2><p>🔒 As respostas aparecem automaticamente quando o progresso chegar a <b>50%</b>.</p></section>
+<section class="cartao respostas" id="respostas" style="display:none"><h2>Respostas da atividade</h2><h3>Caso prático (roteiro 1.2)</h3><div class="resp"><h4>1.2.1 — Escolha do fluxo</h4><p><b>Authorization Code Flow com PKCE</b> para o App Finanças: o usuário digita a senha apenas no provedor, o código trafega pelo navegador mas só vale junto com o <code>code_verifier</code> e o <code>client_secret</code>, que ficam no back-end. Para integrações internas sem usuário (relatórios, conciliação), <b>Client Credentials</b>. O Implicit Flow não é usado: ele entrega o token na URL e foi descontinuado pelas boas práticas atuais (RFC 9700 e OAuth 2.1), que recomendam Authorization Code + PKCE inclusive para SPAs.</p></div><div class="resp"><h4>1.2.2 — Configuração</h4><ul><li><b>Registro:</b> <code>client_id</code> <code>app-financas-web</code>, segredo em variável de ambiente/cofre, fluxos <code>authorization_code</code> e <code>refresh_token</code>.</li><li><b>Redirect URI:</b> somente <code>https://app.exemplo.com.br/callback</code> (no lab, <code>http://localhost:3000/callback</code>), comparação exata, sem curingas.</li><li><b>Escopos:</b> <code>saldo:read</code>, <code>transacoes:read</code> e, só com consentimento explícito, <code>transacoes:write</code>; o serviço interno recebe apenas <code>relatorios:read</code>.</li><li><b>Proteções:</b> <code>state</code> anti-CSRF, PKCE S256 obrigatório, código de uso único válido por 60 s.</li></ul></div><div class="resp"><h4>1.2.3 — Gestão de tokens (exemplo)</h4><p>Às 10h00 o usuário autoriza e recebe um access token JWT que expira às 10h05 e um refresh token opaco válido por 30 min. Às 10h06 a API responde 401; o back-end troca o refresh por um <b>novo par</b> e o refresh antigo é invalidado (<b>rotação</b>). Se o refresh antigo reaparecer, o provedor detecta o <b>reuso</b>, revoga toda a família e exige novo login. No logout, o app chama <code>/revoke</code>. No laboratório, isso foi observado no passo 15 com tokens de 20 s.</p></div><h3>Perguntas da atividade</h3><div class="resp"><h4>1. Como vocês explicariam a importância de escolher o fluxo OAuth adequado para nossa API e qual fluxo vocês recomendariam?</h4><p>Cada fluxo foi desenhado para um tipo de cliente e um nível de confiança. A escolha define <b>onde o token trafega, quem consegue guardá-lo com segurança e se há um usuário consentindo</b>. Um fluxo errado abre brechas: o Implicit expõe o token na URL (histórico, logs, extensões); usar Client Credentials para dados de usuário elimina o consentimento; pedir a senha do usuário ao app anula o propósito do OAuth.</p><p><b>Recomendação:</b> <b>Authorization Code Flow com PKCE</b> para o aplicativo que acessa dados dos clientes. O usuário se autentica só no provedor confiável, o código é de uso único e inútil sem o <code>code_verifier</code> e o <code>client_secret</code>, e o token é obtido em um canal servidor-servidor. Para integrações internas sem usuário, <b>Client Credentials</b>, com escopos próprios e restritos. No laboratório isso foi comprovado: o token do serviço de relatórios recebeu 403 ao tentar ler transações de usuários.</p></div><div class="resp"><h4>2. Quais são os passos fundamentais para configurar corretamente o OAuth, desde o registro da aplicação até a definição dos escopos?</h4><ol><li><b>Registrar a aplicação</b> no provedor: <code>client_id</code>, <code>client_secret</code> (fora do código, em variável de ambiente ou cofre), tipo de cliente (confidencial/público) e fluxos permitidos.</li><li><b>Cadastrar as URLs de redirecionamento</b> exatas, com HTTPS em produção e sem curingas; o provedor deve recusar qualquer outra.</li><li><b>Definir escopos granulares</b> por recurso e operação (<code>saldo:read</code>, <code>transacoes:read</code>, <code>transacoes:write</code>) e pedir apenas o mínimo necessário (menor privilégio), com tela de consentimento clara.</li><li><b>Montar o pedido de autorização</b> com <code>state</code> aleatório (anti-CSRF) e PKCE S256.</li><li><b>Trocar o código por tokens no back-end</b> (<code>POST /token</code>) autenticando o cliente; código de uso único e curta validade.</li><li><b>Configurar a API para validar o token</b>: assinatura, <code>exp</code>, <code>iss</code>, <code>aud</code> e escopo por rota, respondendo 401/403.</li><li><b>Definir a política de tokens</b>: tempo de vida, refresh com rotação e revogação.</li><li><b>Testar e monitorar</b>: testes automatizados das regras (como o <code>npm test</code> do lab), logs sem tokens e revisão periódica dos escopos.</li></ol></div><div class="resp"><h4>3. De que maneira a gestão de tokens (expiração e renovação) contribui para a segurança da nossa API?</h4><ul><li><b>Expiração curta do access token</b> (5–15 min) limita a janela em que um token vazado pode ser usado: no lab, após 20 s a API respondeu 401 “token expirado”.</li><li><b>Renovação via refresh token</b> mantém a sessão sem pedir a senha de novo, então dá para ter tokens curtos sem prejudicar a experiência do usuário.</li><li><b>Rotação com detecção de reuso</b>: cada renovação gera um refresh novo e invalida o anterior; se o antigo reaparece (indício de roubo), toda a família é revogada — comportamento observado no passo 15.</li><li><b>Revogação</b> no logout ou em incidentes corta o acesso imediatamente no provedor.</li><li><b>Armazenamento seguro</b>: refresh opaco guardado só no back-end (nunca em localStorage), tokens fora de logs e URLs, sempre HTTPS.</li><li>Os <b>escopos dentro do token</b> fazem com que, mesmo válido, ele só abra o que foi autorizado (403 na transferência).</li></ul></div><div class="resp"><h4>4. Como vocês comunicariam essa estratégia para a equipe técnica, garantindo que todos estejam alinhados com as melhores práticas de OAuth?</h4><ul><li><b>Resposta objetiva no Slack</b> com a decisão e o link do plano (exemplo abaixo).</li><li><b>Documento de decisão</b> (plano/ADR no repositório) com diagrama de sequência do fluxo, tabela de escopos e política de tokens.</li><li><b>Checklist no code review</b> (modelo de PR): PKCE, <code>state</code>, redirect exata, escopos mínimos, segredos fora do código, validação <code>iss/aud/exp</code>.</li><li><b>Testes de segurança no CI</b>: o pipeline falha se uma regra for quebrada (como o <code>npm test</code> do laboratório).</li><li><b>Demonstração prática</b> em uma sessão curta, usando o ambiente do lab, e um canal único para dúvidas.</li><li><b>Componente compartilhado</b> (middleware de validação de token) para ninguém reimplementar a regra, e revisão do plano a cada novo escopo ou integração.</li></ul><blockquote>“Time, proposta para a API financeira: Authorization Code + PKCE para o app, Client Credentials só para serviços internos; redirect URIs exatas, escopos mínimos (<code>saldo:read</code>, <code>transacoes:read</code>; <code>transacoes:write</code> só com consentimento); access token de 10 min e refresh com rotação. Plano e checklist no repositório (<code>docs/plano-oauth.md</code>); os testes já rodam no CI. Demo amanhã às 14h.”</blockquote></div></section>
+<section class="cartao"><h2>Fontes</h2><ul class="fontes">
+<li>SEDUC-SP — Roteiro de Atividade Prática “Descomplicando o OAuth: autorização segura para APIs” (SISANO2C2B4S25A1AP), Programação Back-End — material de referência</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc6749">RFC 6749 — The OAuth 2.0 Authorization Framework</a> <small>https://www.rfc-editor.org/rfc/rfc6749</small></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc6750">RFC 6750 — Bearer Token Usage</a> <small>https://www.rfc-editor.org/rfc/rfc6750</small></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc7009">RFC 7009 — OAuth 2.0 Token Revocation</a> <small>https://www.rfc-editor.org/rfc/rfc7009</small></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc7636">RFC 7636 — Proof Key for Code Exchange (PKCE)</a> <small>https://www.rfc-editor.org/rfc/rfc7636</small></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc8414">RFC 8414 — OAuth 2.0 Authorization Server Metadata</a> <small>https://www.rfc-editor.org/rfc/rfc8414</small></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9700">RFC 9700 — Best Current Practice for OAuth 2.0 Security</a> <small>https://www.rfc-editor.org/rfc/rfc9700</small></li>
+<li><a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/">The OAuth 2.1 Authorization Framework (draft IETF)</a> <small>https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/</small></li>
+<li><a href="https://nodejs.org/api/crypto.html">Node.js — documentação dos módulos crypto e http</a> <small>https://nodejs.org/api/crypto.html</small></li>
+<li><a href="https://marketplace.visualstudio.com/items?itemName=humao.rest-client">REST Client para VS Code</a> <small>https://marketplace.visualstudio.com/items?itemName=humao.rest-client</small></li>
+</ul></section>
+<section class="cartao"><h2>Feedback do aluno</h2>
+<label for="feedback">O que funcionou, o que foi difícil e o que você mudaria nesta atividade?</label>
+<textarea id="feedback" rows="5" placeholder="Escreva aqui..."></textarea>
+<div class="acoes"><button type="button" id="btnResumo">Copiar resumo para entrega</button><span id="msgResumo" role="status"></span></div></section>
+</main>
+<script>(() => {
+  // Estado mantido apenas em memória durante a sessão (sem localStorage)
+  const estado = { nomes: '', turma: '', itens: {}, feedback: '', respostasLiberadas: false };
+  const itens = Array.from(document.querySelectorAll('input.item'));
+  const barra = document.getElementById('barra');
+  const trilho = document.getElementById('trilho');
+  const txt = document.getElementById('txtProg');
+  const respostas = document.getElementById('respostas');
+  const aviso = document.getElementById('aviso');
+
+  function atualizar() {
+    const feitos = itens.filter((i) => i.checked).length;
+    const pct = Math.round((feitos / itens.length) * 100);
+    barra.style.width = pct + '%';
+    trilho.setAttribute('aria-valuenow', String(pct));
+    txt.textContent = `${feitos} de ${itens.length} itens · ${pct}%` + (pct >= 50 ? ' · respostas liberadas' : '');
+    const liberar = pct >= 50;
+    if (liberar !== estado.respostasLiberadas) {
+      estado.respostasLiberadas = liberar;
+      respostas.style.display = liberar ? 'block' : 'none';
+      aviso.style.display = liberar ? 'none' : 'block';
+      if (liberar) { respostas.classList.remove('revelar'); void respostas.offsetWidth; respostas.classList.add('revelar'); }
+    }
+  }
+
+  itens.forEach((i) => i.addEventListener('change', () => {
+    estado.itens[i.id] = i.checked;
+    const passo = i.closest('.passo');
+    if (passo) passo.classList.toggle('feito', i.checked);
+    atualizar();
+  }));
+  [['nomes', 'nomes'], ['turma', 'turma'], ['feedback', 'feedback']].forEach(([id, chave]) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => { estado[chave] = el.value; });
+  });
+
+  async function copiar(texto) {
+    try { await navigator.clipboard.writeText(texto); return true; }
+    catch {
+      const t = document.createElement('textarea');
+      t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; }
+      t.remove(); return ok;
+    }
+  }
+
+  document.querySelectorAll('.copiar').forEach((b) => b.addEventListener('click', async () => {
+    const codigo = b.closest('.codigo').querySelector('code').textContent;
+    const ok = await copiar(codigo);
+    const antes = b.textContent; b.textContent = ok ? 'Copiado!' : 'Selecione e copie';
+    setTimeout(() => { b.textContent = antes; }, 1600);
+  }));
+
+  document.getElementById('btnResumo').addEventListener('click', async () => {
+    const pendentes = itens.filter((i) => !i.checked).map((i) => i.closest('label').textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    const feitos = itens.length - pendentes.length;
+    const texto = [
+      'Atividade: Descomplicando o OAuth — Programação Back-End (2ª série, 4º bim., semana 25, aula 1)',
+      `Grupo: ${estado.nomes || '(não informado)'} | Turma: ${estado.turma || '(não informada)'}`,
+      `Progresso: ${feitos}/${itens.length} (${Math.round((feitos / itens.length) * 100)}%)`,
+      pendentes.length ? `Pendentes: ${pendentes.join('; ')}` : 'Todos os itens concluídos.',
+      `Feedback: ${estado.feedback || '(sem feedback)'}`,
+    ].join('\n');
+    const ok = await copiar(texto);
+    document.getElementById('msgResumo').textContent = ok ? 'Resumo copiado — cole na entrega.' : 'Não foi possível copiar automaticamente.';
+  });
+
+  atualizar();
+})();
+</script>
+</body></html>
